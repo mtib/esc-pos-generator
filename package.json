@@ -25,11 +25,18 @@
         "node": ">= 18"
       }
     },
+    "target-spa": {
+      "source": "src/spa/index.html",
+      "engines": {
+        "browsers": "Chrome 100"
+      }
+    },
     "types": {
       "source": "src/index-node.ts"
     }
   },
   "scripts": {
+    "start": "parcel serve --target target-spa",
     "build": "parcel build; cp dist/index.d.ts dist/index-node.d.ts; cp dist/index.d.ts dist/index-browser.d.ts",
     "test": "jest"
   },
@@ -42,6 +49,8 @@
     "@types/iconv": "^3.0.1",
     "@types/jest": "^29.2.4",
     "@types/node": "^18.11.18",
+    "@types/react": "^18.0.26",
+    "@types/react-dom": "^18.0.10",
     "buffer": "^5.7.1",
     "events": "^3.3.0",
     "jest": "^29.3.1",
@@ -55,8 +64,17 @@
     "util": "^0.12.5"
   },
   "dependencies": {
+    "@emotion/react": "^11.10.5",
+    "@emotion/styled": "^11.10.5",
+    "@fontsource/roboto": "^4.5.8",
+    "@mui/icons-material": "^5.11.0",
+    "@mui/material": "^5.11.2",
     "bmrequesttype": "^0.0.5",
+    "dom-to-image-more": "^2.13.1",
     "iconv-lite": "^0.6.3",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "react-use-storage-state": "^1.0.5",
     "usb": "^2.6.0"
   }
 }
