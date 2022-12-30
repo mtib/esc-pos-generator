@@ -136,20 +136,18 @@ export class RawImage extends Command {
                 throw new Error('Unreachable');
             }
             if (last.length === 8) {
-                return [...acc, [next]]
+                acc.push([next]);
             } else {
                 last.push(next);
-                return acc;
             }
+            return acc;
         }, [[]] as number[][]);
 
-        // TODO custom threshold
         groupedPixels.forEach((greyBlock, blockIndex) => {
-            buffer.set([
+            buffer[8 + blockIndex] =
                 greyBlock.reduce((acc, next, pixelIndex) => {
                     return acc |= (next <= 200 ? 1 : 0) << (7 - pixelIndex);
-                }, 0),
-            ], 8 + blockIndex)
+                }, 0);
         })
         return buffer;
     }

@@ -5,6 +5,10 @@ import useStorageState from 'react-use-storage-state';
 import { Box, Button, createTheme, CssBaseline, Stack, TextField, ThemeProvider } from '@mui/material';
 import EscPosGenerator from '../../EscPosGenerator';
 import { RawImage } from '../../Command';
+import Dither from 'canvas-dither';
+import prettyMs from 'pretty-ms';
+
+const d = (d1: Date, d2: Date) => prettyMs(d1.getTime() - d2.getTime());
 
 const SPA = () => {
     const ref = React.useRef<HTMLDivElement>(null);
@@ -16,16 +20,28 @@ const SPA = () => {
         if (!element) {
             throw new Error('Scrot element not found');
         }
-        const rgbaPixels = await domtoimage.toPixelData(element);
+        const t0 = new Date();
+        const canvas = await domtoimage.toCanvas(element);
+        const context = canvas.getContext('2d');
+        if (!context) {
+            throw new Error('Failed to get canvas context');
+        }
+        const t1 = new Date();
+        const rgbaPixels = Dither.atkinson(Dither.grayscale(context.getImageData(0, 0, element.scrollWidth, element.scrollHeight))).data;
+
+        const t2 = new Date();
+
         const greyPixels = new Uint8Array(Math.ceil(rgbaPixels.length / 4)); // Should always be integer
         for (var y = 0; y < (rgbaPixels.length / (4 * widthPx)); y++) {
             for (var x = 0; x < widthPx; x++) {
                 const pixelAtXYOffset = 4 * (y * widthPx + x);
                 const pixelAtXY = rgbaPixels.slice(pixelAtXYOffset, pixelAtXYOffset + 4);
                 const greyValue = Math.ceil((pixelAtXY[0] + pixelAtXY[1] + pixelAtXY[2]) / 3);
-                greyPixels.set([greyValue], x + widthPx * y);
+                greyPixels[x + widthPx * y] = greyValue;
             }
         }
+        const t3 = new Date();
+        console.log('domtoimage', d(t1, t0), 'dither', d(t2, t1), 'grey', d(t3, t2));
         return { data: greyPixels, width: element.scrollWidth };
     }, []);
 
@@ -41,10 +57,17 @@ const SPA = () => {
     }, [])
 
     const downloadEscPos = React.useCallback(async () => {
+        const t0 = new Date();
         const { data, width } = await scrot();
+        const t1 = new Date();
         const gen = new EscPosGenerator();
         gen.addCommand(new RawImage(data, width, data.length / width));
-        saveData(new Blob([gen.compile()]))
+        const t2 = new Date();
+        const buffer = gen.compile();
+        const t3 = new Date();
+        saveData(new Blob([buffer]))
+        const t4 = new Date();
+        console.log('scrot', d(t1, t0), 'rawimg', d(t2, t1), 'compile', d(t3, t2), 'save', d(t4, t3));
     }, [scrot, saveData]);
 
     const spaValue = React.useMemo(() => ({
@@ -96,6 +119,7 @@ const SPA = () => {
                                     <hr />
                                     <p>Deals 4d10+3 damage.</p>
                                     <img width="100%" src="https://m.media-amazon.com/images/W/WEBP_402378-T1/images/I/41Sl3Xcl3VL._AC_.jpg" />
+                                    <img width="100%" src="https://upload.wikimedia.org/wikipedia/commons/5/5c/US_Route_8_Rural_Lincoln_County_Wisconsin.jpg" />
                                 </Box>
                             </Box>
                         </Box>
