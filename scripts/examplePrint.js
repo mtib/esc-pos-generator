@@ -7,4 +7,4 @@ gen
     .writeLine('Hello world')
     .writeLine('Hello world')
     .feedLine(4)
-    .print([0x0456, 0x0808]);
+    .printData([0x0456, 0x0808]);

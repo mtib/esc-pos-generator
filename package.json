@@ -19,6 +19,12 @@
         "browsers": "Chrome 100"
       }
     },
+    "target-cli": {
+      "source": "src/cli.ts",
+      "engines": {
+        "node": ">= 18"
+      }
+    },
     "types": {
       "source": "src/index-node.ts"
     }

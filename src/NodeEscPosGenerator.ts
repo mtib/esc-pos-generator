@@ -4,7 +4,7 @@ import { LIBUSB_TRANSFER_TYPE_BULK } from "usb/dist/usb";
 
 class NodeEscPosGenerator extends EscPosGenerator {
 
-    async print(printerIds: [number, number]) {
+    static async print(data: Uint8Array, printerIds: [number, number]) {
         const printer = findByIds(...printerIds);
         if (!printer) {
             throw new Error('Printer not connected');
@@ -19,7 +19,7 @@ class NodeEscPosGenerator extends EscPosGenerator {
 
         outEndpoint.transferType = LIBUSB_TRANSFER_TYPE_BULK;
         await new Promise((resolve, reject) => outEndpoint.transfer(
-            Buffer.from(this.compile()),
+            Buffer.from(data),
             (error, transferred) => {
                 if (error) {
                     reject(error);
@@ -28,6 +28,10 @@ class NodeEscPosGenerator extends EscPosGenerator {
                 resolve(transferred);
             }));
         printer.close();
+    }
+
+    async printData(printerIds: [number, number]) {
+        return NodeEscPosGenerator.print(this.compile(), printerIds);
     }
 }
 
