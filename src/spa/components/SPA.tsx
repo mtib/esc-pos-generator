@@ -14,6 +14,8 @@ const SPA = () => {
     const ref = React.useRef<HTMLDivElement>(null);
 
     const [widthPx, setWidthPx] = useStorageState('printer-width-px', 384);
+    const [padLeftPx, setPadLeftPx] = useStorageState('printer-pad-left-px', 5);
+    const [padRightPx, setPadRightPx] = useStorageState('printer-pad-right-px', 5);
 
     const scrot = React.useCallback(async () => {
         const element = ref.current;
@@ -77,6 +79,42 @@ const SPA = () => {
         scrot,
     }), [widthPx, setWidthPx, scrot]);
 
+    const printerRef = React.useRef<USBDevice | null>(null);
+
+    const print = React.useCallback(async () => {
+        const device = await (async () => {
+            const device = printerRef.current;
+            if (device) {
+                return device;
+            }
+            const newDevice = await navigator.usb.requestDevice({ filters: [{ vendorId: 0x0456, productId: 0x0808 }] });
+            printerRef.current = newDevice;
+
+            await newDevice.open();
+            await newDevice.selectConfiguration(1);
+            await newDevice.claimInterface(0);
+
+            return newDevice;
+        })();
+
+
+        const { data: greyPixels, width } = await scrot();
+        const gen = new EscPosGenerator();
+        gen.addCommand(new RawImage(greyPixels, width, greyPixels.length / width));
+        const escData = gen.compile();
+        await device.transferOut(3, escData);
+    }, [scrot]);
+
+    React.useEffect(() => {
+        return () => {
+            const device = printerRef.current;
+            if (device) {
+                device.close();
+                printerRef.current = null;
+            }
+        }
+    }, []);
+
     const theme = React.useMemo(() => createTheme({ palette: { mode: 'dark' } }), []);
 
     return (
@@ -84,20 +122,33 @@ const SPA = () => {
             <ThemeProvider theme={theme}>
                 <CssBaseline />
                 <Stack direction="row">
-                    <Stack flexGrow={1} py="20px" px="10px" gap="5px">
+                    <Stack flexGrow={1} py="20px" px="10px" gap="10px">
                         <TextField value={widthPx} onChange={(event) => {
                             const val = Number.parseInt(event.target.value, 10);
                             if (!Number.isNaN(val)) {
                                 setWidthPx(val);
                             }
                         }} label="Width in pixels" />
+                        <TextField value={padLeftPx} onChange={(event) => {
+                            const val = Number.parseInt(event.target.value, 10);
+                            if (!Number.isNaN(val)) {
+                                setPadLeftPx(val);
+                            }
+                        }} label="Left padding in pixels" />
+                        <TextField value={padRightPx} onChange={(event) => {
+                            const val = Number.parseInt(event.target.value, 10);
+                            if (!Number.isNaN(val)) {
+                                setPadRightPx(val);
+                            }
+                        }} label="Right padding in pixels" />
                         <Stack direction="row" gap="5px">
                             <Button onClick={scrot} variant="contained">Scrot</Button>
                             <Button onClick={downloadEscPos} variant="contained">Download ESC/POS</Button>
+                            <Button onClick={print} variant="contained">Print</Button>
                         </Stack>
                     </Stack>
                     <Box>
-                        <Box sx={{ border: '1px solid red' }}>
+                        <Box sx={{ border: '1px solid red', filter: 'grayscale(100%) contrast(0.9) brightness(1.6)' }}>
                             <Box ref={ref} sx={{
                                 background: 'white',
                                 color: 'black',
@@ -107,10 +158,16 @@ const SPA = () => {
                                 fontSize: '22px',
                                 overflow: 'hidden',
                                 '& h1': {
-                                    my: '5px',
+                                    my: '0px',
+                                    lineHeight: '100%',
+                                },
+                                '& hr': {
+                                    height: '4px',
+                                    background: 'repeating-linear-gradient(to right, #000 0px 10px, #fff 10px 20px)',
+                                    border: 'none',
                                 }
                             }}>
-                                <Box pt="1px" pb="10px" px="10px">
+                                <Box pt="1px" pb="60px" pl={`${padLeftPx}px`} pr={`${padRightPx}px`}>
                                     <h1>Some stuff</h1>
                                     <ul>
                                         <li>Special stuff</li>
