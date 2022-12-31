@@ -38,7 +38,10 @@
   "scripts": {
     "start": "parcel serve --target target-spa",
     "build": "parcel build; cp dist/index.d.ts dist/index-node.d.ts; cp dist/index.d.ts dist/index-browser.d.ts",
-    "test": "jest"
+    "test": "jest",
+    "clean": "rm -rf ./dist",
+    "predeploy": "npm run clean && NODE_ENV=production npm run build && bash assets/cp-assets.sh",
+    "deploy": "gh-pages -d dist/target-spa -o github -b gh-pages"
   },
   "author": "Markus Horst Becker <mtib.becker@gmail.com>",
   "license": "ISC",
@@ -53,6 +56,7 @@
     "@types/react-dom": "^18.0.10",
     "buffer": "^5.7.1",
     "events": "^3.3.0",
+    "gh-pages": "^4.0.0",
     "jest": "^29.3.1",
     "os-browserify": "^0.3.0",
     "parcel": "^2.8.2",
