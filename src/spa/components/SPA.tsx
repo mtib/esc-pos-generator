@@ -7,6 +7,7 @@ import EscPosGenerator from '../../EscPosGenerator';
 import { RawImage } from '../../Command';
 import Dither from 'canvas-dither';
 import prettyMs from 'pretty-ms';
+import { marked } from 'marked';
 
 const d = (d1: Date, d2: Date) => prettyMs(d1.getTime() - d2.getTime());
 
@@ -117,6 +118,13 @@ const SPA = () => {
 
     const theme = React.useMemo(() => createTheme({ palette: { mode: 'dark' } }), []);
 
+    const [content, setContent] = useStorageState("temporary-content", "# Heading\n## Subheading\nSome **text**\n- Iters\n1. Enums\n- [ ] Checkboxes\n- [x] Checkedboxes");
+    const [htmlContent, setHtmlContent] = React.useState("");
+
+    React.useEffect(() => {
+        setHtmlContent(marked(content));
+    }, [content]);
+
     return (
         <SPAContext.Provider value={spaValue}>
             <ThemeProvider theme={theme}>
@@ -142,10 +150,19 @@ const SPA = () => {
                             }
                         }} label="Right padding in pixels" />
                         <Stack direction="row" gap="5px">
-                            <Button onClick={scrot} variant="contained">Scrot</Button>
                             <Button onClick={downloadEscPos} variant="contained">Download ESC/POS</Button>
                             <Button onClick={print} variant="contained">Print</Button>
                         </Stack>
+                        <TextField
+                            label="Content"
+                            multiline
+                            placeholder="Content"
+                            sx={{
+                                flexGrow: 1,
+                            }}
+                            value={content}
+                            onChange={(event) => setContent(event.target.value)}
+                        />
                     </Stack>
                     <Box>
                         <Box sx={{ border: '1px solid red', filter: 'grayscale(100%) contrast(0.9) brightness(1.6)' }}>
@@ -159,24 +176,57 @@ const SPA = () => {
                                 overflow: 'hidden',
                                 '& h1': {
                                     my: '0px',
-                                    lineHeight: '100%',
+                                    lineHeight: '120%',
+                                },
+                                '& h2': {
+                                    my: '10px',
+                                    lineHeight: '120%',
+                                },
+                                '& p': {
+                                    my: '15px',
+                                },
+                                '& img': {
+                                    width: '100%',
                                 },
                                 '& hr': {
                                     height: '4px',
                                     background: 'repeating-linear-gradient(to right, #000 0px 10px, #fff 10px 20px)',
                                     border: 'none',
-                                }
+                                },
+                                '& input[type="checkbox"]': {
+                                    width: '20px',
+                                    height: '20px',
+                                    position: 'relative',
+                                },
+                                '& input[type="checkbox"]:after': {
+                                    content: '""',
+                                    display: 'block',
+                                    position: 'absolute',
+                                    left: '0px',
+                                    top: '3px',
+                                    width: '20px',
+                                    height: '20px',
+                                    borderRadius: '3px',
+                                    border: '3px solid black',
+                                },
+                                '& input[type="checkbox"]:checked:after': {
+                                    content: '"X"',
+                                    display: 'block',
+                                    position: 'absolute',
+                                    color: 'black',
+                                    fontSize: '21px',
+                                    lineHeight: '15px',
+                                    fontWeight: 700,
+                                    left: '0px',
+                                    top: '3px',
+                                    width: '20px',
+                                    height: '20px',
+                                    borderRadius: '3px',
+                                    border: '3px solid black',
+                                },
                             }}>
-                                <Box pt="1px" pb="60px" pl={`${padLeftPx}px`} pr={`${padRightPx}px`}>
-                                    <h1>Some stuff</h1>
-                                    <ul>
-                                        <li>Special stuff</li>
-                                        <li>Super <b>cool</b></li>
-                                    </ul>
-                                    <hr />
-                                    <p>Deals 4d10+3 damage.</p>
-                                    <img width="100%" src="https://m.media-amazon.com/images/W/WEBP_402378-T1/images/I/41Sl3Xcl3VL._AC_.jpg" />
-                                    <img width="100%" src="https://upload.wikimedia.org/wikipedia/commons/5/5c/US_Route_8_Rural_Lincoln_County_Wisconsin.jpg" />
+                                <Box pt="1px" pb="60px" pl={`${padLeftPx}px`} pr={`${padRightPx}px`} >
+                                    <div dangerouslySetInnerHTML={{ __html: htmlContent }}></div>
                                 </Box>
                             </Box>
                         </Box>
