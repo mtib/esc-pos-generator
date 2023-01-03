@@ -72,7 +72,10 @@
   "dependencies": {
     "@emotion/react": "^11.10.5",
     "@emotion/styled": "^11.10.5",
+    "@fontsource/lora": "^4.5.12",
     "@fontsource/roboto": "^4.5.8",
+    "@fontsource/roboto-condensed": "^4.5.9",
+    "@fontsource/roboto-slab": "^4.5.9",
     "@mui/icons-material": "^5.11.0",
     "@mui/material": "^5.11.2",
     "bmrequesttype": "^0.0.5",

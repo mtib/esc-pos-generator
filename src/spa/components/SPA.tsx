@@ -171,26 +171,32 @@ const SPA = () => {
                                 color: 'black',
                                 position: 'relative',
                                 width: `${widthPx}px`,
-                                fontWeight: 400,
+                                fontWeight: 500,
+                                fontFamily: 'Roboto Slab',
                                 fontSize: '22px',
+                                lineHeight: '120%',
                                 overflow: 'hidden',
-                                '& h1': {
-                                    my: '0px',
-                                    lineHeight: '120%',
+                                '& h1, & h2, & h3, & h4, & h5, & h6': {
+                                    fontVariant: 'small-caps',
+                                    my: '15px',
+                                    mb: '5px',
+                                    lineHeight: '100%',
                                 },
-                                '& h2': {
-                                    my: '10px',
-                                    lineHeight: '120%',
+                                '& h3': {
+                                    borderBottom: '3px solid #555',
+                                },
+                                '& b, & strong': {
+                                    fontWeight: 900,
                                 },
                                 '& p': {
-                                    my: '15px',
+                                    my: '5px',
                                 },
                                 '& img': {
                                     width: '100%',
                                 },
                                 '& hr': {
-                                    height: '4px',
-                                    background: 'repeating-linear-gradient(to right, #000 0px 10px, #fff 10px 20px)',
+                                    height: '3px',
+                                    background: '#555',
                                     border: 'none',
                                 },
                                 '& input[type="checkbox"]': {
