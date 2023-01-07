@@ -2,7 +2,7 @@ import * as React from 'react';
 import { SPAContext } from './SPA.utils';
 import domtoimage from "dom-to-image-more";
 import useStorageState from 'react-use-storage-state';
-import { Box, Button, createTheme, CssBaseline, Stack, TextField, ThemeProvider } from '@mui/material';
+import { Box, Button, createTheme, CssBaseline, Slider, Stack, TextField, ThemeProvider, Typography } from '@mui/material';
 import EscPosGenerator from '../../EscPosGenerator';
 import { RawImage } from '../../Command';
 import Dither from 'canvas-dither';
@@ -17,6 +17,7 @@ const SPA = () => {
     const [widthPx, setWidthPx] = useStorageState('printer-width-px', 384);
     const [padLeftPx, setPadLeftPx] = useStorageState('printer-pad-left-px', 5);
     const [padRightPx, setPadRightPx] = useStorageState('printer-pad-right-px', 5);
+    const [padBottomPx, setPadBottomPx] = useStorageState('printer-pad-bottom-px', 25);
 
     const scrot = React.useCallback(async () => {
         const element = ref.current;
@@ -130,25 +131,31 @@ const SPA = () => {
             <ThemeProvider theme={theme}>
                 <CssBaseline />
                 <Stack direction="row">
-                    <Stack flexGrow={1} py="20px" px="10px" gap="10px">
+                    <Stack flexGrow={1} py="20px" px="20px" gap="10px">
                         <TextField value={widthPx} onChange={(event) => {
                             const val = Number.parseInt(event.target.value, 10);
                             if (!Number.isNaN(val)) {
                                 setWidthPx(val);
                             }
                         }} label="Width in pixels" />
-                        <TextField value={padLeftPx} onChange={(event) => {
-                            const val = Number.parseInt(event.target.value, 10);
-                            if (!Number.isNaN(val)) {
-                                setPadLeftPx(val);
-                            }
-                        }} label="Left padding in pixels" />
-                        <TextField value={padRightPx} onChange={(event) => {
-                            const val = Number.parseInt(event.target.value, 10);
-                            if (!Number.isNaN(val)) {
-                                setPadRightPx(val);
-                            }
-                        }} label="Right padding in pixels" />
+                        <Typography>Left padding</Typography>
+                        <Slider
+                            value={padLeftPx}
+                            onChange={(_, newVal) => setPadLeftPx(newVal as number)}
+                            max={30}
+                        />
+                        <Typography>Right padding</Typography>
+                        <Slider
+                            value={padRightPx}
+                            onChange={(_, newVal) => setPadRightPx(newVal as number)}
+                            max={30}
+                        />
+                        <Typography>Bottom padding</Typography>
+                        <Slider
+                            value={padBottomPx}
+                            onChange={(_, newVal) => setPadBottomPx(newVal as number)}
+                            max={80}
+                        />
                         <Stack direction="row" gap="5px">
                             <Button onClick={downloadEscPos} variant="contained">Download ESC/POS</Button>
                             <Button onClick={print} variant="contained">Print</Button>
@@ -231,7 +238,7 @@ const SPA = () => {
                                     border: '3px solid black',
                                 },
                             }}>
-                                <Box pt="1px" pb="60px" pl={`${padLeftPx}px`} pr={`${padRightPx}px`} >
+                                <Box pt="1px" pb={`${padBottomPx}px`} pl={`${padLeftPx}px`} pr={`${padRightPx}px`} >
                                     <div dangerouslySetInnerHTML={{ __html: htmlContent }}></div>
                                 </Box>
                             </Box>
