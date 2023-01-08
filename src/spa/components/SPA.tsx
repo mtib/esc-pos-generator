@@ -89,7 +89,7 @@ const SPA = () => {
             if (device) {
                 return device;
             }
-            const newDevice = await navigator.usb.requestDevice({ filters: [{ vendorId: 0x0456, productId: 0x0808 }] });
+            const newDevice = await navigator.usb.requestDevice({ filters: [] });
             printerRef.current = newDevice;
 
             await newDevice.open();
