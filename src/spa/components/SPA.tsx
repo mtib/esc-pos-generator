@@ -18,6 +18,8 @@ const SPA = () => {
     const [padLeftPx, setPadLeftPx] = useStorageState('printer-pad-left-px', 5);
     const [padRightPx, setPadRightPx] = useStorageState('printer-pad-right-px', 5);
     const [padBottomPx, setPadBottomPx] = useStorageState('printer-pad-bottom-px', 25);
+    const [fontSizePx, setFontSizePx] = useStorageState('printer-font-size-px', 16);
+    const [lineHeight, setLineHeight] = useStorageState('printer-line-height', 1.2);
 
     const scrot = React.useCallback(async () => {
         const element = ref.current;
@@ -156,6 +158,20 @@ const SPA = () => {
                             onChange={(_, newVal) => setPadBottomPx(newVal as number)}
                             max={80}
                         />
+                        <Typography>{`Font size (${fontSizePx}px)`}</Typography>
+                        <Slider
+                            value={fontSizePx}
+                            onChange={(_, newVal) => setFontSizePx(newVal as number)}
+                            max={50}
+                            min={6}
+                        />
+                        <Typography>{`Line Height (${lineHeight})`}</Typography>
+                        <Slider
+                            value={lineHeight * 10}
+                            onChange={(_, newVal) => setLineHeight(newVal as number / 10)}
+                            max={30}
+                            min={1}
+                        />
                         <Stack direction="row" gap="5px">
                             <Button onClick={downloadEscPos} variant="contained">Download ESC/POS</Button>
                             <Button onClick={print} variant="contained">Print</Button>
@@ -172,7 +188,7 @@ const SPA = () => {
                         />
                     </Stack>
                     <Box>
-                        <Box sx={{ border: '1px solid red', filter: 'grayscale(100%) contrast(0.9) brightness(1.6)' }}>
+                        <Box sx={{ filter: 'grayscale(100%) contrast(0.9) brightness(1.6)' }}>
                             <Box ref={ref} sx={{
                                 background: 'white',
                                 color: 'black',
@@ -180,8 +196,8 @@ const SPA = () => {
                                 width: `${widthPx}px`,
                                 fontWeight: 500,
                                 fontFamily: 'Roboto Slab',
-                                fontSize: '22px',
-                                lineHeight: '120%',
+                                fontSize: `${fontSizePx}px`,
+                                lineHeight,
                                 overflow: 'hidden',
                                 '& h1, & h2, & h3, & h4, & h5, & h6': {
                                     fontVariant: 'small-caps',
@@ -190,7 +206,7 @@ const SPA = () => {
                                     lineHeight: '100%',
                                 },
                                 '& h3': {
-                                    borderBottom: '3px solid #555',
+                                    borderBottom: '3px solid #999',
                                 },
                                 '& b, & strong': {
                                     fontWeight: 900,
