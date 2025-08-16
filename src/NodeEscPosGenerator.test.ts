@@ -1,5 +1,4 @@
 import NodeEscPosGenerator from "./NodeEscPosGenerator";
-import EscPosGenerator from "./EscPosGenerator";
 import { findByIds } from "usb/dist";
 
 // Mock the USB module
@@ -75,8 +74,8 @@ describe('NodeEscPosGenerator', () => {
         test('successfully prints data', async () => {
             const mockOutEndpoint = {
                 transferType: 0,
-                transfer: jest.fn((buffer, callback) => {
-                    callback(null, buffer.length);
+                transfer: jest.fn((_buffer, callback) => {
+                    callback(null, _buffer.length);
                 })
             };
             
@@ -111,7 +110,7 @@ describe('NodeEscPosGenerator', () => {
         test('handles transfer errors', async () => {
             const mockOutEndpoint = {
                 transferType: 0,
-                transfer: jest.fn((buffer, callback) => {
+                transfer: jest.fn((_buffer, callback) => {
                     callback(new Error('Transfer failed'), null);
                 })
             };
