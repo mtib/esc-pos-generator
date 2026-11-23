@@ -1,4 +1,4 @@
-import { CharacterOptions, Characters, Command, Initialize, Newline } from "./Command";
+import { CharacterOptions, Characters, Command, Initialize, Newline, RawImage } from "./Command";
 
 export type EscPosGeneratorParameters = {
     charactersPerLine?: number,
@@ -19,14 +19,13 @@ class EscPosGenerator {
 
     compile(): Uint8Array {
         const buffers = this._listOfActions.map(c => c.toBuffer());
-        const totalLength = buffers.map(buffer => buffer.length).reduce((acc, next) => acc + next, 0);
-
-        const { collector: combinedBuffer } = buffers.reduce(({ offset, collector }, buffer) => {
-            collector.set(buffer, offset)
-            return { offset: offset + buffer.length, collector };
-        }, { offset: 0, collector: new Uint8Array(totalLength) });
-
-        return combinedBuffer;
+        const out = new Uint8Array(buffers.reduce((total, buffer) => total + buffer.length, 0));
+        let offset = 0;
+        for (const buffer of buffers) {
+            out.set(buffer, offset);
+            offset += buffer.length;
+        }
+        return out;
     }
 
     addCommand(command: Command): EscPosGenerator {
@@ -47,6 +46,12 @@ class EscPosGenerator {
 
     feedLine(count: number = 1): EscPosGenerator {
         this.addCommand(new Newline(count));
+        return this;
+    }
+
+    /** Greyscale pixels, row by row; see RawImage. */
+    writeImage(pixels: Uint8Array, width: number, height: number): EscPosGenerator {
+        this.addCommand(new RawImage(pixels, width, height));
         return this;
     }
 

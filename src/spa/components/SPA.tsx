@@ -1,15 +1,59 @@
 import * as React from 'react';
-import { SPAContext } from './SPA.utils';
 import domtoimage from "dom-to-image-more";
 import useStorageState from 'react-use-storage-state';
-import { Box, Button, createTheme, CssBaseline, Slider, Stack, TextField, ThemeProvider, Typography } from '@mui/material';
+import { Alert, Box, Button, createTheme, CssBaseline, Slider, Snackbar, Stack, TextField, ThemeProvider, Typography } from '@mui/material';
 import EscPosGenerator from '../../EscPosGenerator';
-import { RawImage } from '../../Command';
 import Dither from 'canvas-dither';
-import prettyMs from 'pretty-ms';
 import { marked } from 'marked';
 
-const d = (d1: Date, d2: Date) => prettyMs(d1.getTime() - d2.getTime());
+type SliderSettingProps = {
+    label: string,
+    value: number,
+    onChange: (value: number) => void,
+    min?: number,
+    max: number,
+    step?: number,
+    /** show the current value in the label */
+    showValue?: boolean,
+};
+
+const SliderSetting = ({ label, value, onChange, min, max, step, showValue }: SliderSettingProps) => (
+    <>
+        <Typography>{showValue ? `${label} (${value})` : label}</Typography>
+        <Slider
+            value={value}
+            onChange={(_, newVal) => onChange(newVal as number)}
+            min={min}
+            max={max}
+            step={step}
+        />
+    </>
+);
+
+type Status = { severity: 'success' | 'error' | 'info', message: string } | null;
+
+const hasWebUsb = typeof navigator !== 'undefined' && 'usb' in navigator;
+
+/** Opens the device (once) and finds its first bulk OUT endpoint. */
+const openPrinter = async (device: USBDevice): Promise<number> => {
+    if (!device.opened) {
+        await device.open();
+    }
+    if (device.configuration === null) {
+        await device.selectConfiguration(1);
+    }
+    for (const usbInterface of device.configuration?.interfaces ?? []) {
+        const alternate = usbInterface.alternates[0];
+        const endpoint = alternate?.endpoints.find(e => e.direction === 'out' && e.type === 'bulk');
+        if (endpoint) {
+            if (!usbInterface.claimed) {
+                await device.claimInterface(usbInterface.interfaceNumber);
+            }
+            return endpoint.endpointNumber;
+        }
+    }
+    throw new Error('USB device has no bulk OUT endpoint, is it a printer?');
+};
 
 const SPA = () => {
     const ref = React.useRef<HTMLDivElement>(null);
@@ -20,175 +64,140 @@ const SPA = () => {
     const [padBottomPx, setPadBottomPx] = useStorageState('printer-pad-bottom-px', 25);
     const [fontSizePx, setFontSizePx] = useStorageState('printer-font-size-px', 16);
     const [lineHeight, setLineHeight] = useStorageState('printer-line-height', 1.2);
+    const [content, setContent] = useStorageState("temporary-content", "# Heading\n## Subheading\nSome **text**\n- Iters\n1. Enums\n- [ ] Checkboxes\n- [x] Checkedboxes");
 
-    const scrot = React.useCallback(async () => {
+    const [busy, setBusy] = React.useState(false);
+    const [status, setStatus] = React.useState<Status>(null);
+
+    const htmlContent = React.useMemo(() => marked(content), [content]);
+
+    /** Renders the preview, dithers it and returns the greyscale pixels. */
+    const render = React.useCallback(async () => {
         const element = ref.current;
         if (!element) {
-            throw new Error('Scrot element not found');
+            throw new Error('Preview element not found');
         }
-        const t0 = new Date();
         const canvas = await domtoimage.toCanvas(element);
         const context = canvas.getContext('2d');
         if (!context) {
             throw new Error('Failed to get canvas context');
         }
-        const t1 = new Date();
-        const rgbaPixels = Dither.atkinson(Dither.grayscale(context.getImageData(0, 0, element.scrollWidth, element.scrollHeight))).data;
-
-        const t2 = new Date();
-
-        const greyPixels = new Uint8Array(Math.ceil(rgbaPixels.length / 4)); // Should always be integer
-        for (var y = 0; y < (rgbaPixels.length / (4 * widthPx)); y++) {
-            for (var x = 0; x < widthPx; x++) {
-                const pixelAtXYOffset = 4 * (y * widthPx + x);
-                const pixelAtXY = rgbaPixels.slice(pixelAtXYOffset, pixelAtXYOffset + 4);
-                const greyValue = Math.ceil((pixelAtXY[0] + pixelAtXY[1] + pixelAtXY[2]) / 3);
-                greyPixels[x + widthPx * y] = greyValue;
-            }
+        const width = element.scrollWidth;
+        const height = element.scrollHeight;
+        const rgba = Dither.atkinson(Dither.grayscale(context.getImageData(0, 0, width, height))).data;
+        // after grayscale + dithering R, G and B are equal, so one channel is enough
+        const pixels = new Uint8Array(width * height);
+        for (let i = 0; i < pixels.length; i++) {
+            pixels[i] = rgba[i * 4];
         }
-        const t3 = new Date();
-        console.log('domtoimage', d(t1, t0), 'dither', d(t2, t1), 'grey', d(t3, t2));
-        return { data: greyPixels, width: element.scrollWidth };
+        return new EscPosGenerator().writeImage(pixels, width, height).compile();
     }, []);
 
-    const saveData = React.useCallback((blob: Blob, filename: string = 'data.raw') => {
-        var a = document.createElement("a");
-        document.body.appendChild(a);
-        const url = URL.createObjectURL(blob);
+    const run = React.useCallback(async (action: () => Promise<string>) => {
+        setBusy(true);
+        try {
+            setStatus({ severity: 'success', message: await action() });
+        } catch (error) {
+            console.error(error);
+            setStatus({ severity: 'error', message: error instanceof Error ? error.message : String(error) });
+        } finally {
+            setBusy(false);
+        }
+    }, []);
+
+    const downloadEscPos = React.useCallback(() => run(async () => {
+        const buffer = await render();
+        const url = URL.createObjectURL(new Blob([buffer]));
+        const a = document.createElement('a');
         a.href = url;
-        a.download = filename;
+        a.download = 'data.raw';
         a.click();
         URL.revokeObjectURL(url);
-        document.body.removeChild(a);
-    }, [])
+        return `Downloaded ${buffer.length} bytes`;
+    }), [render, run]);
 
-    const downloadEscPos = React.useCallback(async () => {
-        const t0 = new Date();
-        const { data, width } = await scrot();
-        const t1 = new Date();
-        const gen = new EscPosGenerator();
-        gen.addCommand(new RawImage(data, width, data.length / width));
-        const t2 = new Date();
-        const buffer = gen.compile();
-        const t3 = new Date();
-        saveData(new Blob([buffer]))
-        const t4 = new Date();
-        console.log('scrot', d(t1, t0), 'rawimg', d(t2, t1), 'compile', d(t3, t2), 'save', d(t4, t3));
-    }, [scrot, saveData]);
+    const printerRef = React.useRef<{ device: USBDevice, endpoint: number } | null>(null);
 
-    const spaValue = React.useMemo(() => ({
-        widthPx,
-        setWidthPx,
-        ref,
-        scrot,
-    }), [widthPx, setWidthPx, scrot]);
-
-    const printerRef = React.useRef<USBDevice | null>(null);
-
-    const print = React.useCallback(async () => {
-        const device = await (async () => {
-            const device = printerRef.current;
-            if (device) {
-                return device;
-            }
-            const newDevice = await navigator.usb.requestDevice({ filters: [] });
-            printerRef.current = newDevice;
-
-            await newDevice.open();
-            await newDevice.selectConfiguration(1);
-            await newDevice.claimInterface(0);
-
-            return newDevice;
-        })();
-
-
-        const { data: greyPixels, width } = await scrot();
-        const gen = new EscPosGenerator();
-        gen.addCommand(new RawImage(greyPixels, width, greyPixels.length / width));
-        const escData = gen.compile();
-        await device.transferOut(3, escData);
-    }, [scrot]);
-
-    React.useEffect(() => {
-        return () => {
-            const device = printerRef.current;
-            if (device) {
-                device.close();
-                printerRef.current = null;
-            }
+    const print = React.useCallback(() => run(async () => {
+        let printer = printerRef.current;
+        if (!printer) {
+            // previously authorised devices don't need the picker again
+            const known = await navigator.usb.getDevices();
+            const device = known.length === 1 ? known[0] : await navigator.usb.requestDevice({ filters: [] });
+            printer = { device, endpoint: await openPrinter(device) };
+            printerRef.current = printer;
         }
+        try {
+            const buffer = await render();
+            await printer.device.transferOut(printer.endpoint, buffer);
+            return `Printed ${buffer.length} bytes`;
+        } catch (error) {
+            // force a reconnect on the next attempt (unplugged, claimed elsewhere, ...)
+            printerRef.current = null;
+            await printer.device.close().catch(() => undefined);
+            throw error;
+        }
+    }), [render, run]);
+
+    React.useEffect(() => () => {
+        printerRef.current?.device.close().catch(() => undefined);
+        printerRef.current = null;
     }, []);
 
     const theme = React.useMemo(() => createTheme({ palette: { mode: 'dark' } }), []);
 
-    const [content, setContent] = useStorageState("temporary-content", "# Heading\n## Subheading\nSome **text**\n- Iters\n1. Enums\n- [ ] Checkboxes\n- [x] Checkedboxes");
-    const [htmlContent, setHtmlContent] = React.useState("");
-
-    React.useEffect(() => {
-        setHtmlContent(marked(content));
-    }, [content]);
-
     return (
-        <SPAContext.Provider value={spaValue}>
-            <ThemeProvider theme={theme}>
-                <CssBaseline />
-                <Stack direction="row">
-                    <Stack flexGrow={1} py="20px" px="20px" gap="10px">
-                        <TextField value={widthPx} onChange={(event) => {
+        <ThemeProvider theme={theme}>
+            <CssBaseline />
+            <Stack direction="row" flexWrap="wrap">
+                <Stack flexGrow={1} flexBasis="320px" py="20px" px="20px" gap="10px">
+                    <TextField
+                        type="number"
+                        label="Width in pixels"
+                        value={widthPx}
+                        inputProps={{ min: 8, max: 2048, step: 8 }}
+                        onChange={(event) => {
                             const val = Number.parseInt(event.target.value, 10);
-                            if (!Number.isNaN(val)) {
+                            if (!Number.isNaN(val) && val > 0) {
                                 setWidthPx(val);
                             }
-                        }} label="Width in pixels" />
-                        <Typography>Left padding</Typography>
-                        <Slider
-                            value={padLeftPx}
-                            onChange={(_, newVal) => setPadLeftPx(newVal as number)}
-                            max={30}
-                        />
-                        <Typography>Right padding</Typography>
-                        <Slider
-                            value={padRightPx}
-                            onChange={(_, newVal) => setPadRightPx(newVal as number)}
-                            max={30}
-                        />
-                        <Typography>Bottom padding</Typography>
-                        <Slider
-                            value={padBottomPx}
-                            onChange={(_, newVal) => setPadBottomPx(newVal as number)}
-                            max={80}
-                        />
-                        <Typography>{`Font size (${fontSizePx}px)`}</Typography>
-                        <Slider
-                            value={fontSizePx}
-                            onChange={(_, newVal) => setFontSizePx(newVal as number)}
-                            max={50}
-                            min={6}
-                        />
-                        <Typography>{`Line Height (${lineHeight})`}</Typography>
-                        <Slider
-                            value={lineHeight * 10}
-                            onChange={(_, newVal) => setLineHeight(newVal as number / 10)}
-                            max={30}
-                            min={1}
-                        />
-                        <Stack direction="row" gap="5px">
-                            <Button onClick={downloadEscPos} variant="contained">Download ESC/POS</Button>
-                            <Button onClick={print} variant="contained">Print</Button>
-                        </Stack>
-                        <TextField
-                            label="Content"
-                            multiline
-                            placeholder="Content"
-                            sx={{
-                                flexGrow: 1,
-                            }}
-                            value={content}
-                            onChange={(event) => setContent(event.target.value)}
-                        />
+                        }}
+                    />
+                    <SliderSetting label="Left padding" value={padLeftPx} onChange={setPadLeftPx} max={30} showValue />
+                    <SliderSetting label="Right padding" value={padRightPx} onChange={setPadRightPx} max={30} showValue />
+                    <SliderSetting label="Bottom padding" value={padBottomPx} onChange={setPadBottomPx} max={80} showValue />
+                    <SliderSetting label="Font size" value={fontSizePx} onChange={setFontSizePx} min={6} max={50} showValue />
+                    <SliderSetting
+                        label="Line height"
+                        value={lineHeight}
+                        onChange={(v) => setLineHeight(Math.round(v * 10) / 10)}
+                        min={0.5}
+                        max={3}
+                        step={0.1}
+                        showValue
+                    />
+                    <Stack direction="row" gap="5px">
+                        <Button onClick={downloadEscPos} disabled={busy} variant="contained">Download ESC/POS</Button>
+                        <Button
+                            onClick={print}
+                            disabled={busy || !hasWebUsb}
+                            variant="contained"
+                            title={hasWebUsb ? undefined : 'WebUSB is not available, use Chrome'}
+                        >
+                            Print
+                        </Button>
                     </Stack>
-                    <Box>
-                        <Box sx={{ filter: 'grayscale(100%) contrast(0.9) brightness(1.6)' }}>
+                    <TextField
+                        label="Content (Markdown)"
+                        multiline
+                        minRows={8}
+                        sx={{ flexGrow: 1 }}
+                        value={content}
+                        onChange={(event) => setContent(event.target.value)}
+                    />
+                </Stack>
+                <Box sx={{ position: 'sticky', top: 0, alignSelf: 'flex-start', maxHeight: '100vh', overflowY: 'auto' }}>
+                    <Box sx={{ filter: 'grayscale(100%) contrast(0.9) brightness(1.6)' }}>
                             <Box ref={ref} sx={{
                                 background: 'white',
                                 color: 'black',
@@ -254,15 +263,17 @@ const SPA = () => {
                                     border: '3px solid black',
                                 },
                             }}>
-                                <Box pt="1px" pb={`${padBottomPx}px`} pl={`${padLeftPx}px`} pr={`${padRightPx}px`} >
-                                    <div dangerouslySetInnerHTML={{ __html: htmlContent }}></div>
-                                </Box>
+                            <Box pt="1px" pb={`${padBottomPx}px`} pl={`${padLeftPx}px`} pr={`${padRightPx}px`}>
+                                <div dangerouslySetInnerHTML={{ __html: htmlContent }}></div>
                             </Box>
                         </Box>
                     </Box>
-                </Stack>
-            </ThemeProvider>
-        </SPAContext.Provider>
+                </Box>
+            </Stack>
+            <Snackbar open={status !== null} autoHideDuration={5000} onClose={() => setStatus(null)}>
+                {status ? <Alert severity={status.severity} onClose={() => setStatus(null)}>{status.message}</Alert> : undefined}
+            </Snackbar>
+        </ThemeProvider>
     )
 }
 

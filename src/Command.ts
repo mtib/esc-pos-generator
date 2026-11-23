@@ -62,10 +62,21 @@ export type Underline = typeof UNDERLINE_NONE | typeof UNDERLINE_SINGLE | typeof
 
 export type CharacterOptions = {
     bold?: boolean,
+    /** Not supported by ESC/POS, accepted for API compatibility and ignored. */
     italics?: boolean,
     underline?: Underline,
 };
 
+const UNDERLINE_MODE = {
+    [UNDERLINE_NONE]: 0x00,
+    [UNDERLINE_SINGLE]: 0x01,
+    [UNDERLINE_DOUBLE]: 0x02,
+};
+
+/**
+ * Text encoded as code page 437 (the default of virtually every printer), so
+ * box drawing and common accented characters work. Unmappable characters become "?".
+ */
 export class Characters extends Command {
     text: string;
     italics: boolean;
@@ -79,92 +90,77 @@ export class Characters extends Command {
         this.underline = options.underline || UNDERLINE_NONE;
     }
     toBuffer(): Uint8Array {
-        const array: number[] = [];
-        if (this.underline !== UNDERLINE_NONE) {
-            array.push(0x1b, 0x2d, {
-                [UNDERLINE_SINGLE]: 0x01,
-                [UNDERLINE_DOUBLE]: 0x02,
-            }[this.underline]);
+        const text = iconv.encode(this.text, 'cp437');
+        const underlined = this.underline !== UNDERLINE_NONE;
+        const prefix: number[] = [];
+        const suffix: number[] = [];
+        if (underlined) {
+            prefix.push(0x1b, 0x2d, UNDERLINE_MODE[this.underline]);
+            suffix.push(0x1b, 0x2d, 0x00);
         }
-
-        const textBytes = iconv.encode(this.text, 'ascii');
-        for (let i = 0; i < textBytes.byteLength; i++) {
-            array.push(textBytes.readUInt8(i));
+        if (this.bold) {
+            prefix.push(0x1b, 0x45, 0x01);
+            suffix.push(0x1b, 0x45, 0x00);
         }
-
-        if (this.underline !== UNDERLINE_NONE) {
-            array.push(0x1b, 0x2d, 0x00);
-        }
-        return Uint8Array.from(array);
+        const out = new Uint8Array(prefix.length + text.length + suffix.length);
+        out.set(prefix, 0);
+        out.set(text, prefix.length);
+        out.set(suffix, prefix.length + text.length);
+        return out;
     }
 }
 
 /**
- * Requires pre-processing of the image
+ * Raster image (GS v 0). Rows are padded to a full byte on the right, so any width works.
  */
 export class RawImage extends Command {
     pixelData: Uint8Array;
     width: number;
     height: number;
+    threshold: number;
     /**
-     * @param pixelData Greyscale pixels (width x height)
-     * @param width 
-     * @param height 
+     * @param pixelData Greyscale pixels (width x height), row by row
+     * @param width
+     * @param height
+     * @param threshold pixels with a value at or below this are printed black
      */
-    constructor(pixelData: Uint8Array, width: number, height: number) {
+    constructor(pixelData: Uint8Array, width: number, height: number, threshold = 200) {
         super();
         if (width * height !== pixelData.length) {
             throw new Error(`Pixel data does not match provided width and height: ${pixelData.length} pixels for ${width} x ${height}.`);
         }
-        if (pixelData.length % 8 !== 0) {
-            throw new Error(`width x height = ${width} x ${height} = ${width * height} needs to be a multiple of 8 (${width * height} % 8) = ${(width * height) % 8}`)
+        if (width > 0xffff * 8 || height > 0xffff) {
+            throw new Error(`Image of ${width} x ${height} is too large`);
         }
         this.width = width;
         this.height = height;
         this.pixelData = pixelData;
+        this.threshold = threshold;
+    }
+    private rowBytes(): number {
+        return Math.ceil(this.width / 8);
     }
     toBuffer(): Uint8Array {
+        const rowBytes = this.rowBytes();
         const buffer = new Uint8Array(this.length());
         buffer.set([
             0x1d, 0x76, 0x30, 0x00,
-            Math.ceil(this.width % 2048 / 8), Math.floor(this.width / 2048),
-            this.height % 256, Math.floor(this.height / 256),
+            rowBytes & 0xff, rowBytes >> 8,
+            this.height & 0xff, this.height >> 8,
         ], 0);
-        const groupedPixels = this.pixelData.reduce((acc, next) => {
-            const last = acc.at(-1);
-            if (last === undefined) {
-                throw new Error('Unreachable');
+        const { width, height, pixelData, threshold } = this;
+        for (let y = 0; y < height; y++) {
+            const rowStart = y * width;
+            const outStart = 8 + y * rowBytes;
+            for (let x = 0; x < width; x++) {
+                if (pixelData[rowStart + x] <= threshold) {
+                    buffer[outStart + (x >> 3)] |= 0x80 >> (x & 7);
+                }
             }
-            if (last.length === 8) {
-                acc.push([next]);
-            } else {
-                last.push(next);
-            }
-            return acc;
-        }, [[]] as number[][]);
-
-        groupedPixels.forEach((greyBlock, blockIndex) => {
-            buffer[8 + blockIndex] =
-                greyBlock.reduce((acc, next, pixelIndex) => {
-                    return acc |= (next <= 200 ? 1 : 0) << (7 - pixelIndex);
-                }, 0);
-        })
+        }
         return buffer;
     }
     length(): number {
-        return Math.ceil(this.pixelData.length / 8 + 8);
-    }
-}
-
-/**
- * Re-scales and _optimises_ the image data.
- */
-export class Image extends RawImage {
-    constructor(pixelData: Uint8Array, inWidth: number, inHeight: number, outWidth: number, outHeight: number) {
-        throw new Error('Not implemented');
-        super(pixelData, inWidth, inHeight);
-    }
-    toBuffer(): Uint8Array {
-        throw new Error("Method not implemented.");
+        return 8 + this.rowBytes() * this.height;
     }
 }
