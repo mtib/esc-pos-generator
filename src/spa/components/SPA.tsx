@@ -602,9 +602,11 @@ const SPA = () => {
                 tabIndex={0}
                 style={{ ['--paper-width' as string]: `${widthPx}px` }}
             >
-                <Switch label="Show printed result (dithered)" checked={showPrinted} onChange={setShowPrinted} />
-                <Switch label="Limit black per row (for printers that fade on large black areas)" checked={limitBlack} onChange={setLimitBlack} />
-                <Switch label="Dither pictures and greys (off is crisper for plain text)" checked={dither} onChange={setDither} />
+                <div className="spa-preview-options">
+                    <Switch label="Show printed result" checked={showPrinted} onChange={setShowPrinted} />
+                    <Switch label="Limit black per row" checked={limitBlack} onChange={setLimitBlack} />
+                    <Switch label="Dither pictures and greys" checked={dither} onChange={setDither} />
+                </div>
                 <div ref={previewColumnRef} className="spa-paper-column">
                     <div
                         className="spa-paper"
