@@ -15,14 +15,41 @@ Client-side ESC/POS encoder and printer tooling (no server). See README.md for t
     Only `html`, `body` and box-sizing are styled globally; everything else is class scoped.
   - `src/spa/receipt.css`: styles of the rasterised `.receipt` node. These are printed pixels: any change here
     changes the output. `letter-spacing: 0.15008px` and `color-scheme: normal` pin what the old MUI baseline
-    used to inherit, keep them.
+    used to inherit, keep them. Never style plain elements under `.spa-preview` in `spa.css`, they would leak in.
+  - `src/spa/components/SPA.tsx`: the page. `rasterise()` (dom-to-image, grayscale, Atkinson) feeds both the
+    printer and the "printed result" canvas drawn over the HTML preview. On narrow screens the paper is scaled
+    with a transform on an outer wrapper; the `.receipt` node itself must stay unscaled, rasterising reads its layout.
+  - `src/spa/preset.ts`: settings ranges and defaults, plus the URL hash codec (tests in `preset.test.ts`).
+  - `src/spa/examples.ts`: the default content and the example presets (checklist, `TEA_LABEL`).
+  - `src/spa/sanitize.ts`: marked plus DOMPurify (pinned exact version); keeps inline styles, images and
+    task list checkboxes, drops every other input.
+  - `src/spa/errors.ts`, `format.ts`, `images.ts`: friendly WebUSB and render errors, file names and mm maths,
+    pasted image downscaling and the localStorage quota check.
 - `assets/`: files copied into the SPA build by `npm run deploy` (CNAME for esc.pos.mtib.dev).
+
+## URL hash presets
+
+`https://esc.pos.mtib.dev/#<hash>` where `<hash>` is base64url (padding optional) of a UTF-8 JSON object:
+
+```json
+{ "content": "# Markdown", "widthPx": 384, "padLeftPx": 5, "padRightPx": 5, "padBottomPx": 25, "fontSizePx": 16, "lineHeight": 1.2 }
+```
+
+All keys are optional, unknown keys are ignored, numbers are clamped and snapped to `RANGES` in `preset.ts`,
+malformed hashes are ignored. On load a valid preset overrides the saved state (with Undo), then the hash is
+removed with `history.replaceState` so a reload keeps the user's edits. "Copy link" builds the same format.
+
+## Persistence gotcha
+
+react-use-storage-state overwrites the saved value whenever the default passed to it changes, so changing
+`DEFAULT_CONTENT` or `DEFAULT_SETTINGS` resets every user's saved content or settings. It also swallows quota
+errors; `isSavedInLocalStorage` checks after the fact (used for pasted images).
 
 ## Commands
 
 ```sh
 npm install
-npx jest              # tests (ts-jest, src/*.test.ts)
+npx jest              # tests (ts-jest, src/**/*.test.ts)
 npx tsc --noEmit      # type check, keep it clean
 npm start             # SPA dev server with HMR
 npm run build         # parcel build of all four targets

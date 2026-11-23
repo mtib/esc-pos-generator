@@ -3,17 +3,116 @@
     display: flex;
     flex-direction: row;
     flex-wrap: wrap;
+    align-items: flex-start;
+    gap: var(--space-5);
+    padding: var(--space-5);
+    max-width: 1440px;
+    margin: 0 auto;
+}
+
+@media (max-width: 599px) {
+    .spa {
+        padding: var(--space-4);
+        gap: var(--space-4);
+    }
+
+    .spa-preview {
+        padding: var(--space-3);
+    }
 }
 
 .spa-controls {
-    flex: 1 1 320px;
-    padding: 20px;
+    flex: 1 1 360px;
+    min-width: 0;
+}
+
+.spa-header {
+    justify-content: space-between;
+}
+
+.spa-header h1 {
+    margin: 0;
+    font-size: 1.35rem;
+    font-weight: 500;
+    letter-spacing: 0;
 }
 
 .spa-preview {
-    position: sticky;
+    flex: 1 1 400px;
+    min-width: 0;
+    /* never wider than the paper plus the frame, so the editor gets the rest */
+    max-width: calc(var(--paper-width) + 2 * var(--space-4));
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--space-3);
+    padding: var(--space-4);
+    border-radius: 10px;
+    background: #0b0b0b;
+}
+
+@media (min-width: 900px) {
+    .spa-preview {
+        position: sticky;
+        top: var(--space-5);
+        max-height: calc(100vh - 2 * var(--space-5));
+        overflow-y: auto;
+    }
+}
+
+.spa-paper-column {
+    width: 100%;
+    display: flex;
+    justify-content: center;
+}
+
+.spa-paper {
+    flex: none;
+    overflow: hidden;
+    box-shadow: 0 2px 14px rgba(0, 0, 0, 0.7);
+}
+
+.spa-paper-scale {
+    position: relative;
+    transform-origin: top left;
+}
+
+.spa-printed {
+    position: absolute;
     top: 0;
-    align-self: flex-start;
-    max-height: 100vh;
-    overflow-y: auto;
+    left: 0;
+}
+
+.spa-size {
+    margin: 0;
+    text-align: center;
+}
+
+.spa-help {
+    border-collapse: collapse;
+    width: 100%;
+    font-size: 0.9rem;
+}
+
+.spa-help th,
+.spa-help td {
+    text-align: left;
+    vertical-align: top;
+    padding: 6px 8px;
+    border-bottom: 1px solid var(--border);
+}
+
+.spa-help th {
+    color: var(--text-dim);
+    font-weight: 500;
+}
+
+.spa-help code {
+    white-space: nowrap;
+    color: var(--accent);
+}
+
+/* never target plain elements inside .spa-preview: they would leak into the printed .receipt */
+.ui-dialog p {
+    margin: 0;
 }

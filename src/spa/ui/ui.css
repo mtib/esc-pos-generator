@@ -37,6 +37,12 @@ html {
     box-sizing: inherit;
 }
 
+/* children of details inherit through its internal slot, which stays content-box */
+.ui-accordion > *,
+.ui-menu > * {
+    box-sizing: border-box;
+}
+
 strong, b {
     font-weight: 700;
 }
@@ -239,7 +245,7 @@ textarea.ui-input {
     gap: 2px;
 }
 
-.ui-slider label {
+.ui-slider-head {
     display: flex;
     justify-content: space-between;
     gap: var(--space-2);
@@ -463,6 +469,8 @@ textarea.ui-input {
 
 .ui-menu > summary {
     list-style: none;
+    /* block level, an inline-flex summary would sit on a taller line box */
+    display: flex;
 }
 
 .ui-menu > summary::-webkit-details-marker {

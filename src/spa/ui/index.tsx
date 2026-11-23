@@ -128,10 +128,10 @@ export const Slider = ({ label, value, onChange, min = 0, max, step = 1, unit }:
     const text = unit ? `${value} ${unit}` : String(value);
     return (
         <div className="ui-slider">
-            <label htmlFor={id}>
-                <span>{label}</span>
-                <output htmlFor={id}>{text}</output>
-            </label>
+            <div className="ui-slider-head">
+                <label htmlFor={id}>{label}</label>
+                <output htmlFor={id} aria-hidden="true">{text}</output>
+            </div>
             <input
                 id={id}
                 type="range"
