@@ -39,8 +39,8 @@ export const RANGES: { [K in keyof Settings]: Range } = {
 
 export const DEFAULT_SETTINGS: Settings = {
     widthPx: 384,
-    padLeftPx: 5,
-    padRightPx: 5,
+    padLeftPx: 0,
+    padRightPx: 0,
     padBottomPx: 25,
     fontSizePx: 16,
     lineHeight: 1.2,

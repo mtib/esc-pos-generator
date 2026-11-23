@@ -32,7 +32,7 @@ Client-side ESC/POS encoder and printer tooling (no server). See README.md for t
 `https://esc.pos.mtib.dev/#<hash>` where `<hash>` is base64url (padding optional) of a UTF-8 JSON object:
 
 ```json
-{ "content": "# Markdown", "widthPx": 384, "padLeftPx": 5, "padRightPx": 5, "padBottomPx": 25, "fontSizePx": 16, "lineHeight": 1.2 }
+{ "content": "# Markdown", "widthPx": 384, "padLeftPx": 0, "padRightPx": 0, "padBottomPx": 25, "fontSizePx": 16, "lineHeight": 1.2 }
 ```
 
 All keys are optional, unknown keys are ignored, numbers are clamped and snapped to `RANGES` in `preset.ts`,

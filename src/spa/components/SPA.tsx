@@ -75,8 +75,8 @@ const SPA = () => {
     const previewColumnRef = React.useRef<HTMLDivElement>(null);
 
     const [widthPx, setWidthPx] = useStorageState('printer-width-px', DEFAULT_SETTINGS.widthPx);
-    const [padLeftPx, setPadLeftPx] = useStorageState('printer-pad-left-px', DEFAULT_SETTINGS.padLeftPx);
-    const [padRightPx, setPadRightPx] = useStorageState('printer-pad-right-px', DEFAULT_SETTINGS.padRightPx);
+    const [padLeftPx, setPadLeftPx] = useStorageState('printer-pad-left-px-v2', DEFAULT_SETTINGS.padLeftPx);
+    const [padRightPx, setPadRightPx] = useStorageState('printer-pad-right-px-v2', DEFAULT_SETTINGS.padRightPx);
     const [padBottomPx, setPadBottomPx] = useStorageState('printer-pad-bottom-px', DEFAULT_SETTINGS.padBottomPx);
     const [fontSizePx, setFontSizePx] = useStorageState('printer-font-size-px', DEFAULT_SETTINGS.fontSizePx);
     const [lineHeight, setLineHeight] = useStorageState('printer-line-height', DEFAULT_SETTINGS.lineHeight);
