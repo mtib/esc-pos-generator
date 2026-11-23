@@ -39,6 +39,8 @@ Options:
   --print             print it: renders like --preview and sends the exact pixels to the USB printer
                       (needs the printer free of the usblp driver, see the esc-pos-link skill)
   --printer <vid:pid> USB id for --print (default 0456:0808)
+  --no-limit          render without the black limit (preview, print and --dump see the unthinned dither)
+  --dump <file>       write the rendered pixels as raw 8 bit grey (width x height bytes) for experiments
   --open              open the link in the default browser instead of printing it
   --base <url>        app address (default ${BASE})
   --decode <x>        print the decoded JSON of a link or hash and exit
@@ -58,6 +60,8 @@ let decode;
 let open = false;
 let previewFile;
 let print = false;
+let noLimit = false;
+let dumpFile;
 let printerId = "0456:0808";
 
 for (let i = 0; i < args.length; i++) {
@@ -69,6 +73,10 @@ for (let i = 0; i < args.length; i++) {
         base = args[++i] ?? fail("--base needs a value");
     } else if (arg === "--preview") {
         previewFile = args[++i] ?? fail("--preview needs a file name");
+    } else if (arg === "--no-limit") {
+        noLimit = true;
+    } else if (arg === "--dump") {
+        dumpFile = args[++i] ?? fail("--dump needs a file name");
     } else if (arg === "--print") {
         print = true;
     } else if (arg === "--printer") {
@@ -120,7 +128,7 @@ if (link.length > MAX_SAFE_LENGTH) {
     console.error(`esc-link: link is ${link.length} characters, some chat apps and servers cut links above ${MAX_SAFE_LENGTH}`);
 }
 /** Loads the link in headless Chromium (muted, fresh profile) and saves the dithered canvas as a PNG. */
-const renderPreview = async (url, outFile, expectedWidth, wantPixels = false) => {
+const renderPreview = async (url, outFile, expectedWidth, wantPixels = false, limit = true) => {
     const profile = mkdtempSync(join(tmpdir(), "esc-link-"));
     const port = 9300 + Math.floor(Math.random() * 500);
     const chrome = spawn(process.env.CHROMIUM ?? "chromium", ["--headless=new", "--mute-audio", "--no-sandbox", "--disable-gpu",
@@ -148,6 +156,10 @@ const renderPreview = async (url, outFile, expectedWidth, wantPixels = false) =>
         });
         const evaluate = async (expression) => (await send("Runtime.evaluate", { expression, awaitPromise: true, returnByValue: true })).result?.result?.value;
         await send("Emulation.setDeviceMetricsOverride", { width: 1280, height: 900, deviceScaleFactor: 1, mobile: false });
+        if (!limit) {
+            // the app keeps the switch in localStorage; seed it before the page loads
+            await send("Page.addScriptToEvaluateOnNewDocument", { source: "localStorage.setItem('printer-limit-black', 'false')" });
+        }
         await send("Page.navigate", { url });
         // the canvas is redrawn about 300 ms after each change; wait until it has the paper width and stays stable
         let rect;
@@ -229,8 +241,12 @@ const sendToPrinter = async (bytes, id) => {
     }
 };
 
-if (previewFile || print) {
-    const rect = await renderPreview(link, previewFile, settings.widthPx ?? 384, print);
+if (previewFile || print || dumpFile) {
+    const rect = await renderPreview(link, previewFile, settings.widthPx ?? 384, print || Boolean(dumpFile), !noLimit);
+    if (dumpFile) {
+        writeFileSync(dumpFile, rect.pixels);
+        console.error(`esc-link: dumped ${rect.width} x ${rect.height} grey pixels to ${dumpFile}`);
+    }
     const size = `${rect.width} x ${rect.height} px, about ${Math.round(rect.height / 8)} mm of paper`;
     if (previewFile) {
         console.error(`esc-link: wrote ${previewFile} (${size})`);

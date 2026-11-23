@@ -64,7 +64,43 @@ const fill = (widthPx, heightPx, byteAt) => {
 // tries the middle: strips of 2, 4, 8 and 16 rows with a pause between strips, at 240 and 288 dots, vs a continuous control.
 // Round 7 found: pauses help only on heavier rows (16 row strips at 288 dots). Round 8 (--round 8) compares ways of
 // filling an area with the same black budget (192 dots per row, 50%): coarse chunks, fine checker, random dither, stripes.
-if (round === 8) {
+// Round 8 compared 50% fills. Round 9 (--round 9) asks where the dot budget per row starts to hurt for the
+// layouts the limiter produces: the limiter's own 2x2 dither of a solid block, 8 runs, and a single run.
+if (round === 9) {
+    const { limitBlackPerRow } = await import("../src/limitBlack.ts");
+    add([0x1b, 0x40, ...text("HEAT TEST 9, budget by layout"), ...feed(1)]);
+    const rows = 20;
+    const raster = (rowRule) => {
+        const bytes = [];
+        for (let y = 0; y < rows; y++) {
+            for (let b = 0; b < 48; b++) {
+                let v = 0;
+                for (let i = 0; i < 8; i++) {
+                    v |= rowRule(b * 8 + i, y) ? 0x80 >> i : 0;
+                }
+                bytes.push(v);
+            }
+        }
+        return [0x1d, 0x76, 0x30, 0x00, 48, 0, rows, 0, ...bytes];
+    };
+    const layouts = {
+        dither: (dots) => {
+            const limited = limitBlackPerRow(new Uint8Array(384 * rows).fill(0), 384, rows, dots / 384, 200);
+            return raster((x, y) => limited[y * 384 + x] <= 200);
+        },
+        "8 runs": (dots) => raster((x) => {
+            const length = dots / 8;
+            return [...Array(8).keys()].some((i) => x >= Math.floor(i * 48) && x < Math.floor(i * 48) + length);
+        }),
+        "1 run": (dots) => raster((x) => x < dots),
+    };
+    for (const [name, make] of Object.entries(layouts)) {
+        for (const dots of [207, 216, 224, 240]) {
+            add([...text(`${name}, ${dots} dots`), ...make(dots), ...feed(1)], 600);
+        }
+    }
+    add([...text("done"), ...feed(4)]);
+} else if (round === 8) {
     add([0x1b, 0x40, ...text("HEAT TEST 8, 50% fills"), ...feed(1)]);
     // deterministic pseudo random generator so reruns print the same page
     let seed = 12345;

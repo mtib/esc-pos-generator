@@ -58,18 +58,20 @@ npm run deploy        # build + publish dist/target-spa to gh-pages
 
 ## Printer limits (0456:0808, measured with scripts/heat-test.mjs)
 
-The 58 mm printer on AC power cannot fire more than about half the dots of a row: contiguous bars of 192, 200 and
-208 black dots print solid, 216 gets specks, 224 to 240 are mottled, scattered patterns degrade sooner (62% coverage
-is streaky), 288 dots are very faint, 336 almost invisible, 384 (a full row) print nothing. `ESC 7 n` (one
+The 58 mm printer on AC power cannot fire more than about half the dots of a row: bars of 192 to 224 black dots
+print solid in every layout tested (round 9: the limiter's 2x2 dither, 8 runs, 1 run; one calibration showed specks
+at 216), at 240 a solid run is lightly textured, 8 runs get mottled and the dither stays even; 288 dots are very
+faint, 336 almost invisible, 384 (a full row) print nothing. `ESC 7 n` (one
 parameter, the three parameter heating form prints its extra bytes as text) and `DC2 # n` (a no-op, `n` prints as
 text) change nothing, and pausing does not help: strips of 8 rows with pauses changed nothing and rows sent one at a time
 with 150 or 400 ms pauses (round 6) printed patchy and fainter than continuous sending. Round 7 (strips of 2 to 16 rows, 300 ms pauses): at 240 dots continuous is best, at 288 dots 16 row strips are best
 (not yet checked how close to solid). So pauses help only on heavier rows. Coarse 50% chunk patterns print dark.
-`src/limitBlack.ts` therefore caps black dots per row at 54% of the width (207 dots) (each row over the cap loses exactly its excess, in
+`src/limitBlack.ts` therefore caps black dots per row with a soft knee (untouched up to 54% = 207 dots, then compressed towards 58% = 222 dots,
+with the thinning of a heavy row fading out over 3 rows above and below) (each row over the cap loses exactly its excess, in
 ordered-dither order on 2x2 dot cells, deep interior dots first so outlines and a 2 dot margin around white text stay); the SPA applies it before preview and print behind the
 "Limit black per row" switch (default on). Consequences: full-width rules print as short dashes, inverted (white on
 black) text is unreadable, so design with outlines instead of black fills.
-`scripts/heat-test.mjs [--round 1..7]` reprints the experiments (needs the printer free of the `usblp` driver).
+`scripts/heat-test.mjs [--round 1..9]` reprints the experiments (needs the printer free of the `usblp` driver).
 
 ## Preset links CLI
 
