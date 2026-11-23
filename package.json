@@ -41,7 +41,7 @@
     "test": "jest",
     "clean": "rm -rf ./dist",
     "predeploy": "npm run clean && NODE_ENV=production npm run build && bash assets/cp-assets.sh",
-    "deploy": "gh-pages -d dist/target-spa -o github -b gh-pages"
+    "deploy": "gh-pages -d dist/target-spa -o origin -b gh-pages"
   },
   "author": "Markus Horst Becker <mtib.becker@gmail.com>",
   "license": "ISC",

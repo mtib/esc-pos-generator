@@ -23,6 +23,12 @@ npm run build         # parcel build of all four targets
 npm run deploy        # build + publish dist/target-spa to gh-pages
 ```
 
+## CI and deploy
+
+`.github/workflows/ci.yml` runs on GitHub-hosted runners (the repo is public, so never self-hosted ones):
+type check and tests on every push and PR, and on pushes to main it builds the SPA and force-pushes it to the
+`gh-pages` branch (served at esc.pos.mtib.dev, CNAME comes from `assets/target-spa`). `npm run deploy` does the same by hand.
+
 ## Conventions and gotchas
 
 - 4 space indentation, double quotes in the library, strict TypeScript.
