@@ -1,0 +1,19 @@
+/* page layout of the SPA (components live in ui/ui.css, the printed receipt in receipt.css) */
+.spa {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: wrap;
+}
+
+.spa-controls {
+    flex: 1 1 320px;
+    padding: 20px;
+}
+
+.spa-preview {
+    position: sticky;
+    top: 0;
+    align-self: flex-start;
+    max-height: 100vh;
+    overflow-y: auto;
+}

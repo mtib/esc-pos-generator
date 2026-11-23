@@ -8,6 +8,9 @@ import '@fontsource/roboto/700.css';
 import "@fontsource/roboto-condensed";
 import "@fontsource/lora";
 import "@fontsource/roboto-slab";
+import "./ui/ui.css";
+import "./receipt.css";
+import "./spa.css";
 
 const rootElement = document.getElementById('spa');
 if (rootElement === null) {

@@ -1,0 +1,91 @@
+/*
+ * The rasterised receipt. These rules are what gets printed: dom-to-image-more copies the computed
+ * styles of this subtree, so changes here change the printed pixels. Ported one to one from the old
+ * MUI sx styles; width, font size and line height come in as inline styles.
+ */
+.receipt {
+    background: white;
+    color: black;
+    position: relative;
+    font-weight: 500;
+    font-family: "Roboto Slab";
+    overflow: hidden;
+    /* inherited from the MUI body before; pinned so the UI theme cannot shift the glyphs */
+    letter-spacing: 0.15008px;
+    color-scheme: normal;
+}
+
+/* the old preview sat under a CSS filter; the canvas of the printed result does not */
+.receipt-filter {
+    filter: grayscale(100%) contrast(0.9) brightness(1.6);
+}
+
+.receipt h1,
+.receipt h2,
+.receipt h3,
+.receipt h4,
+.receipt h5,
+.receipt h6 {
+    font-variant: small-caps;
+    margin-top: 15px;
+    margin-bottom: 5px;
+    line-height: 100%;
+}
+
+.receipt h3 {
+    border-bottom: 3px solid #999;
+}
+
+.receipt b,
+.receipt strong {
+    font-weight: 900;
+}
+
+.receipt p {
+    margin-top: 5px;
+    margin-bottom: 5px;
+}
+
+.receipt img {
+    width: 100%;
+}
+
+.receipt hr {
+    height: 3px;
+    background: #555;
+    border: none;
+}
+
+.receipt input[type="checkbox"] {
+    width: 20px;
+    height: 20px;
+    position: relative;
+}
+
+.receipt input[type="checkbox"]:after {
+    content: "";
+    display: block;
+    position: absolute;
+    left: 0px;
+    top: 3px;
+    width: 20px;
+    height: 20px;
+    border-radius: 3px;
+    border: 3px solid black;
+}
+
+.receipt input[type="checkbox"]:checked:after {
+    content: "X";
+    display: block;
+    position: absolute;
+    color: black;
+    font-size: 21px;
+    line-height: 15px;
+    font-weight: 700;
+    left: 0px;
+    top: 3px;
+    width: 20px;
+    height: 20px;
+    border-radius: 3px;
+    border: 3px solid black;
+}

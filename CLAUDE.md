@@ -8,8 +8,14 @@ Client-side ESC/POS encoder and printer tooling (no server). See README.md for t
 - `src/EscPosGenerator.ts`: queues commands, `compile()` concatenates them into a `Uint8Array`. Browser safe.
 - `src/NodeEscPosGenerator.ts`: adds USB printing in Node via the `usb` package.
 - `src/cli.ts`: `<vid_hex>:<pid_hex> [file]`, sends a raw ESC/POS file or stdin to a printer.
-- `src/spa/`: React + MUI app. Markdown is rendered to a DOM node, rasterised with dom-to-image-more,
+- `src/spa/`: React app (no UI framework). Markdown is rendered to a DOM node, rasterised with dom-to-image-more,
   Atkinson-dithered and sent as one `RawImage` over WebUSB (Chrome only).
+  - `src/spa/ui/`: the small DIY component library (`index.tsx`) and its dark theme (`ui.css`, CSS custom
+    properties on `:root`). Built on native elements: label, input type=range, radio groups, details, dialog.
+    Only `html`, `body` and box-sizing are styled globally; everything else is class scoped.
+  - `src/spa/receipt.css`: styles of the rasterised `.receipt` node. These are printed pixels: any change here
+    changes the output. `letter-spacing: 0.15008px` and `color-scheme: normal` pin what the old MUI baseline
+    used to inherit, keep them.
 - `assets/`: files copied into the SPA build by `npm run deploy` (CNAME for esc.pos.mtib.dev).
 
 ## Commands
