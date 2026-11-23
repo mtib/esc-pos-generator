@@ -4,10 +4,10 @@ const rowCounts = (pixels: Uint8Array, width: number, height: number) =>
     Array.from({ length: height }, (_, y) => pixels.slice(y * width, (y + 1) * width).filter((p) => p <= 200).length);
 
 describe('limitBlackPerRow', () => {
-    test('a full black block ends up at or below half of every row', () => {
+    test('a full black block ends up at or below 54% of every row', () => {
         const pixels = new Uint8Array(384 * 24).fill(0);
         const limited = limitBlackPerRow(pixels, 384, 24);
-        expect(Math.max(...rowCounts(limited, 384, 24))).toBeLessThanOrEqual(192);
+        expect(Math.max(...rowCounts(limited, 384, 24))).toBeLessThanOrEqual(207);
         // the interior is a dark chunk pattern, not an empty area
         expect(rowCounts(limited, 384, 24)[10]).toBeGreaterThan(150);
     });
@@ -15,7 +15,7 @@ describe('limitBlackPerRow', () => {
     test('rows under the limit are left alone', () => {
         const pixels = new Uint8Array(384 * 8).fill(255);
         for (let y = 0; y < 8; y++) {
-            for (let x = 0; x < 192; x++) {
+            for (let x = 0; x < 207; x++) {
                 pixels[y * 384 + x] = 0;
             }
         }
@@ -44,7 +44,7 @@ describe('limitBlackPerRow', () => {
                 expect(limited[y * width + x]).toBe(255);
             }
         }
-        expect(Math.max(...rowCounts(limited, width, 12))).toBeLessThanOrEqual(64);
+        expect(Math.max(...rowCounts(limited, width, 12))).toBeLessThanOrEqual(69);
     });
 
     test('respects a custom fraction', () => {

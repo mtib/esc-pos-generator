@@ -1,7 +1,9 @@
 /**
  * Some thermal printers cannot fire more than about half the dots of a row at once: black above that fades and a
- * full row prints nothing (measured on a 384 dot printer: 192 contiguous dots print solid, 240 are streaky,
- * 288 very faint, 336 almost invisible, 384 blank; ESC 7 and DC2 # make no difference).
+ * full row prints nothing. Measured on the 384 dot 0456:0808 printer: contiguous bars of 192, 200 and 208 dots
+ * print solid, 216 gets a few white specks, 224 to 240 are mottled; scattered patterns degrade sooner (62% coverage,
+ * about 240 dots, is streaky), 288 dots are very faint, 336 almost invisible, 384 blank. ESC 7 and DC2 # make no
+ * difference. The default of 54% (207 dots) is the last solid width.
  *
  * This keeps every row at or below `maxFraction` of the width black, so large black areas still print.
  * Rows that are already under the limit (nearly all text) are left untouched. A row over it loses only as many dots
@@ -11,6 +13,7 @@
  *      outlines and a 2 dot margin around white text intact;
  *   2. any other black dot in the cleared chunks, which turns a full width rule into dashes.
  */
+export const DEFAULT_MAX_FRACTION = 0.54;
 export const CHUNK_W = 8;
 export const CHUNK_H = 4;
 const INTERIOR_MARGIN = 2;
@@ -23,7 +26,7 @@ export const limitBlackPerRow = (
     pixels: Uint8Array,
     width: number,
     height: number,
-    maxFraction = 0.5,
+    maxFraction = DEFAULT_MAX_FRACTION,
     threshold = 200,
 ): Uint8Array => {
     const out = pixels.slice();

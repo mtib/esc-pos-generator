@@ -56,7 +56,15 @@ const fill = (widthPx, heightPx, byteAt) => {
 // Round 3 found: black dots per row are limited. 192 of 384 contiguous dots print solid black, above that the
 // print fades (240 faint, 288 very faint, 336 almost nothing, 384 nothing). Round 4 (--round 4) tries ESC 7 n
 // with its single parameter (maybe dots fired at once) on full-width black, plus coarse 50% chunk patterns.
-if (round === 4) {
+// Round 4 found: ESC 7 n changes nothing and 8 / 24 dot 50% chunk patterns print dark. Round 5 (--round 5)
+// narrows down the limit between 192 (solid) and 240 (streaky) dots with contiguous solid bars.
+if (round === 5) {
+    add([0x1b, 0x40, ...text("HEAT TEST 5, bar width in dots"), ...feed(1)]);
+    for (const dots of [192, 200, 208, 216, 224, 232, 240]) {
+        add([...text(`${dots} dots`), ...fill(384, 24, (x) => (x * 8 < dots ? 0xff : 0x00)), ...feed(1)], 1000);
+    }
+    add([...text("done"), ...feed(4)]);
+} else if (round === 4) {
     add([0x1b, 0x40, ...text("HEAT TEST 4, ESC 7 n"), ...feed(1)]);
     for (const n of [0, 1, 2, 4]) {
         add([...ESC7(n, 0, 0).slice(0, 3), ...text(`S ESC 7 ${n}, full black`), ...fill(384, 32, () => 0xff), ...feed(2)], 1500);
