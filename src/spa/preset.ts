@@ -19,7 +19,7 @@ export type Settings = {
  * (loading an example must not reset them):
  *   - dither: Atkinson dithering of greys and pictures; off gives a hard black and white cut, crisper for plain text
  *   - offsetPx: shifts the content right (positive) or left (negative) by narrowing the opposite padding, to even out
- *     a printer whose paper margins differ (measured: 4 mm left, 8 mm right on the 0456:0808, so +32 centres it)
+ *     a printer whose paper margins differ: dots = (right margin - left margin in mm) * 8, measured per printer
  */
 export type Preset = Partial<Settings> & { content?: string, dither?: boolean, offsetPx?: number };
 

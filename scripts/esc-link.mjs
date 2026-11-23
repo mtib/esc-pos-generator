@@ -42,7 +42,7 @@ Options:
   --no-limit          render without the black limit (preview, print and --dump see the unthinned dither)
   --dump <file>       write the rendered pixels as raw 8 bit grey (width x height bytes) for experiments
   --offset <dots>     shift the content right (negative: left), evens out a printer whose paper margins differ
-                      (the 0456:0808 has 4 mm left and 8 mm right of the paper, so use --offset 32 there)
+                      (dots = (right margin - left margin in mm) * 8, measure with the margin test in the skill)
   --dither / --no-dither  force dithering on or off (default: off unless the content has pictures, so plain
                       text prints with crisp edges; the link always carries the choice so it overrides the browser's)
   --open              open the link in the default browser instead of printing it

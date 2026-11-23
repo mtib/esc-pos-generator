@@ -78,8 +78,9 @@ black) text is unreadable, so design with outlines instead of black fills.
 `dither` (default on) switches Atkinson dithering; off cuts hard to black and white (grey below 128 is black), which
 keeps plain text crisp, so `scripts/esc-link.mjs` writes `dither: false` into links without pictures and `true` for
 content with `<img` or `![](`. `offsetPx` (-64 to 64) shifts the content right (positive) or left by narrowing the
-opposite padding, to even out a printer whose paper margins differ: the 0456:0808 measured 4 mm left and 8 mm right
-with equal padding (head not centred on the paper), so `--offset 32` (32 dots = 4 mm) centres it. Both live in
+opposite padding, to even out a printer whose paper margins differ (the print head need not be centred on the paper):
+offset dots = (right margin - left margin in mm) * 8. It is a per printer calibration that can change, so measure it
+with the margin test instead of trusting a stored number. Both live in
 `localStorage` (`printer-dither`, `printer-offset-px`), not in `Settings`, so examples and Reset do not touch them.
 `examples/margin-test.html` in the skill prints bars at 0, 5, 10 and 20 dots from each edge to verify this.
 
