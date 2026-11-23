@@ -56,6 +56,12 @@ npm run build         # parcel build of all four targets
 npm run deploy        # build + publish dist/target-spa to gh-pages
 ```
 
+## Preset links CLI
+
+`scripts/esc-link.mjs [file] [--width px ...]` turns HTML/Markdown from a file or stdin into an esc.pos.mtib.dev
+preset link (`--decode` inspects one). It imports `src/spa/preset.ts` directly (Node 22.18+), so it shares the app's
+codec and clamping. The global skill `esc-pos-link` documents the workflow for Claude.
+
 ## CI and deploy
 
 `.github/workflows/ci.yml` runs on GitHub-hosted runners (the repo is public, so never self-hosted ones):
