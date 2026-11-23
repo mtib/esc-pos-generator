@@ -58,7 +58,21 @@ const fill = (widthPx, heightPx, byteAt) => {
 // with its single parameter (maybe dots fired at once) on full-width black, plus coarse 50% chunk patterns.
 // Round 4 found: ESC 7 n changes nothing and 8 / 24 dot 50% chunk patterns print dark. Round 5 (--round 5)
 // narrows down the limit between 192 (solid) and 240 (streaky) dots with contiguous solid bars.
-if (round === 5) {
+// Round 5 found: contiguous bars of 192 to 208 dots print solid, 216 gets specks, 224 to 240 are mottled.
+// Round 6 (--round 6) sends the same kind of bars one raster row at a time with a pause after every row.
+if (round === 6) {
+    add([0x1b, 0x40, ...text("HEAT TEST 6, slowed rows"), ...feed(1)]);
+    for (const pause of [150, 400]) {
+        for (const dots of [216, 240, 264, 288]) {
+            add(text(`${dots} dots, ${pause} ms per row`));
+            for (let row = 0; row < 24; row++) {
+                add(fill(384, 1, (x) => (x * 8 < dots ? 0xff : 0x00)), pause);
+            }
+            add(feed(1), 500);
+        }
+    }
+    add([...text("done"), ...feed(4)]);
+} else if (round === 5) {
     add([0x1b, 0x40, ...text("HEAT TEST 5, bar width in dots"), ...feed(1)]);
     for (const dots of [192, 200, 208, 216, 224, 232, 240]) {
         add([...text(`${dots} dots`), ...fill(384, 24, (x) => (x * 8 < dots ? 0xff : 0x00)), ...feed(1)], 1000);

@@ -62,12 +62,13 @@ The 58 mm printer on AC power cannot fire more than about half the dots of a row
 208 black dots print solid, 216 gets specks, 224 to 240 are mottled, scattered patterns degrade sooner (62% coverage
 is streaky), 288 dots are very faint, 336 almost invisible, 384 (a full row) print nothing. `ESC 7 n` (one
 parameter, the three parameter heating form prints its extra bytes as text) and `DC2 # n` (a no-op, `n` prints as
-text) change nothing, and pausing between strips does not help. Coarse 50% chunk patterns print dark.
+text) change nothing, and pausing does not help: strips of 8 rows with pauses changed nothing and rows sent one at a time
+with 150 or 400 ms pauses (round 6) printed patchy and fainter than continuous sending. Send continuously. Coarse 50% chunk patterns print dark.
 `src/limitBlack.ts` therefore caps black dots per row at 54% of the width (207 dots) (thinning solid interiors in 8x4 dot chunks,
 keeping outlines and a 2 dot margin around white text); the SPA applies it before preview and print behind the
 "Limit black per row" switch (default on). Consequences: full-width rules print as short dashes, inverted (white on
 black) text is unreadable, so design with outlines instead of black fills.
-`scripts/heat-test.mjs [--round 1..5]` reprints the experiments (needs the printer free of the `usblp` driver).
+`scripts/heat-test.mjs [--round 1..6]` reprints the experiments (needs the printer free of the `usblp` driver).
 
 ## Preset links CLI
 
