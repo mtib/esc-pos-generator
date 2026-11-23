@@ -2,6 +2,7 @@
 // Builds (or decodes) an esc.pos.mtib.dev preset link. Content is HTML/Markdown from a file or stdin.
 // Needs Node 22.18+ (runs the TypeScript codec directly, so the CLI can never drift from the app).
 import fs from "node:fs";
+import { spawn } from "node:child_process";
 import { decodePreset, encodePreset, RANGES, clampSetting } from "../src/spa/preset.ts";
 
 const BASE = "https://esc.pos.mtib.dev/";
@@ -29,6 +30,7 @@ Options:
   --pad-bottom <px>   ${RANGES.padBottomPx.min} to ${RANGES.padBottomPx.max}
   --font-size <px>    ${RANGES.fontSizePx.min} to ${RANGES.fontSizePx.max}
   --line-height <n>   ${RANGES.lineHeight.min} to ${RANGES.lineHeight.max}
+  --open              open the link in the default browser instead of printing it
   --base <url>        app address (default ${BASE})
   --decode <x>        print the decoded JSON of a link or hash and exit
   -h, --help`);
@@ -44,6 +46,7 @@ const settings = {};
 let file;
 let base = BASE;
 let decode;
+let open = false;
 
 for (let i = 0; i < args.length; i++) {
     const arg = args[i];
@@ -52,6 +55,8 @@ for (let i = 0; i < args.length; i++) {
         process.exit(0);
     } else if (arg === "--base") {
         base = args[++i] ?? fail("--base needs a value");
+    } else if (arg === "--open") {
+        open = true;
     } else if (arg === "--decode") {
         decode = args[++i] ?? fail("--decode needs a value");
     } else if (arg in FLAGS) {
@@ -96,4 +101,14 @@ const link = `${base.replace(/#.*$/, "")}#${encodePreset({ ...settings, content 
 if (link.length > MAX_SAFE_LENGTH) {
     console.error(`esc-link: link is ${link.length} characters, some chat apps and servers cut links above ${MAX_SAFE_LENGTH}`);
 }
-console.log(link);
+if (open) {
+    const [command, ...commandArgs] = process.platform === "darwin" ? ["open"]
+        : process.platform === "win32" ? ["cmd", "/c", "start", ""]
+            : ["xdg-open"];
+    const child = spawn(command, [...commandArgs, link], { stdio: "ignore", detached: true });
+    child.on("error", (error) => fail(`could not open the browser (${error.message}), run without --open to get the link`));
+    child.unref();
+    console.error(`esc-link: opened ${base.replace(/#.*$/, "")} in the browser (${link.length} character link)`);
+} else {
+    console.log(link);
+}
