@@ -62,7 +62,38 @@ const fill = (widthPx, heightPx, byteAt) => {
 // Round 6 (--round 6) sends the same kind of bars one raster row at a time with a pause after every row.
 // Round 6 found: one row at a time with pauses is patchy and fainter than continuous sending. Round 7 (--round 7)
 // tries the middle: strips of 2, 4, 8 and 16 rows with a pause between strips, at 240 and 288 dots, vs a continuous control.
-if (round === 7) {
+// Round 7 found: pauses help only on heavier rows (16 row strips at 288 dots). Round 8 (--round 8) compares ways of
+// filling an area with the same black budget (192 dots per row, 50%): coarse chunks, fine checker, random dither, stripes.
+if (round === 8) {
+    add([0x1b, 0x40, ...text("HEAT TEST 8, 50% fills"), ...feed(1)]);
+    // deterministic pseudo random generator so reruns print the same page
+    let seed = 12345;
+    const random = () => (seed = (seed * 1664525 + 1013904223) % 4294967296) / 4294967296;
+    const dotsAt = (rule) => {
+        const bits = Array.from({ length: 32 }, (_, y) => Array.from({ length: 384 }, (_, x) => rule(x, y)));
+        const bytes = bits.map((row) => Array.from({ length: 48 }, (_, b) => row.slice(b * 8, b * 8 + 8)
+            .reduce((acc, on, i) => acc | (on ? 0x80 >> i : 0), 0)));
+        return [0x1d, 0x76, 0x30, 0x00, 48, 0, 32, 0, ...bytes.flat()];
+    };
+    const randomRows = Array.from({ length: 32 }, () => {
+        const order = Array.from({ length: 384 }, (_, i) => i).sort(() => random() - 0.5);
+        const on = new Set(order.slice(0, 192));
+        return (x) => on.has(x);
+    });
+    const patterns = [
+        ["A 8x4 chunks (now)", (x, y) => (Math.floor(x / 8) + Math.floor(y / 4)) % 2 === 0],
+        ["B 4x2 chunks", (x, y) => (Math.floor(x / 4) + Math.floor(y / 2)) % 2 === 0],
+        ["C 2x2 chunks", (x, y) => (Math.floor(x / 2) + Math.floor(y / 2)) % 2 === 0],
+        ["D 1 dot checker", (x, y) => (x + y) % 2 === 0],
+        ["E random dither", (x, y) => randomRows[y](x)],
+        ["F vertical stripes 4", (x) => Math.floor(x / 4) % 2 === 0],
+        ["G diagonal stripes 4", (x, y) => Math.floor((x + y) / 4) % 2 === 0],
+    ];
+    for (const [label, rule] of patterns) {
+        add([...text(label), ...dotsAt(rule), ...feed(1)], 700);
+    }
+    add([...text("done"), ...feed(4)]);
+} else if (round === 7) {
     add([0x1b, 0x40, ...text("HEAT TEST 7, strips"), ...feed(1)]);
     for (const dots of [240, 288]) {
         const bar = (rows) => fill(384, rows, (x) => (x * 8 < dots ? 0xff : 0x00));

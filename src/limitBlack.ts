@@ -3,20 +3,26 @@
  * full row prints nothing. Measured on the 384 dot 0456:0808 printer: contiguous bars of 192, 200 and 208 dots
  * print solid, 216 gets a few white specks, 224 to 240 are mottled; scattered patterns degrade sooner (62% coverage,
  * about 240 dots, is streaky), 288 dots are very faint, 336 almost invisible, 384 blank. ESC 7 and DC2 # make no
- * difference. The default of 54% (207 dots) is the last solid width.
+ * difference, and pausing between rows does not help. The default of 54% (207 dots) is the last solid width.
  *
  * This keeps every row at or below `maxFraction` of the width black, so large black areas still print.
- * Rows that are already under the limit (nearly all text) are left untouched. A row over it loses only as many dots
- * as it must, in this order, spread evenly along the row:
- *   1. deep interior dots (everything within 2 dots is black) inside the cleared chunks of a coarse checker of
- *      CHUNK_W x CHUNK_H dot chunks. That prints dark (8 and 24 dot chunks both worked on the printer) and keeps
- *      outlines and a 2 dot margin around white text intact;
- *   2. any other black dot in the cleared chunks, which turns a full width rule into dashes.
+ * Rows that are already under the limit (nearly all text) are left untouched. A row over it loses exactly as many
+ * dots as it must, chosen by an ordered dither on CELL x CELL dot cells (a Bayer matrix ranks the cells, the lowest
+ * ranks go first), so a heavy area becomes a halftone and a slightly heavy row loses only a few scattered cells:
+ *   1. deep interior dots (everything within 2 dots is black) go first, which keeps outlines and a 2 dot margin
+ *      around white text intact;
+ *   2. if that is not enough, any other black dot, which turns a full width rule into a fine dotted line.
  */
 export const DEFAULT_MAX_FRACTION = 0.54;
-export const CHUNK_W = 8;
-export const CHUNK_H = 4;
+/** Edge length in dots of one dither cell; 2 dot cells printed as dark as larger ones in the printer tests. */
+export const CELL = 2;
 const INTERIOR_MARGIN = 2;
+
+/** 8 x 8 Bayer matrix value (0 to 63) by the standard recursion. */
+const bayer8 = (x: number, y: number): number => {
+    const level = (bx: number, by: number) => 2 * (bx ^ by) + by;
+    return level(x & 1, y & 1) * 16 + level((x >> 1) & 1, (y >> 1) & 1) * 4 + level((x >> 2) & 1, (y >> 2) & 1);
+};
 
 /**
  * @param pixels greyscale, row by row, dots with a value at or below `threshold` are black
@@ -43,8 +49,8 @@ export const limitBlackPerRow = (
         if (count <= max) {
             continue;
         }
-        const chunkRow = Math.floor(y / CHUNK_H);
-        const inClearedChunk = (x: number) => (Math.floor(x / CHUNK_W) + chunkRow) % 2 === 1;
+        const cellRow = Math.floor(y / CELL);
+        const rank = (x: number) => bayer8(Math.floor(x / CELL), cellRow);
         const deepInterior = (x: number) => {
             for (let dy = -INTERIOR_MARGIN; dy <= INTERIOR_MARGIN; dy++) {
                 for (let dx = -INTERIOR_MARGIN; dx <= INTERIOR_MARGIN; dx++) {
@@ -56,20 +62,29 @@ export const limitBlackPerRow = (
             return true;
         };
         let excess = count - max;
-        const removeEvenly = (candidates: number[]) => {
+        const removeByRank = (candidates: number[]) => {
+            candidates.sort((a, b) => rank(a) - rank(b) || a - b);
             const n = Math.min(excess, candidates.length);
-            for (let i = 0; i < n; i++) {
-                out[y * width + candidates[Math.floor((i + 0.5) * candidates.length / n)]] = 255;
+            if (n === 0) {
+                return;
+            }
+            // whole ranks below the cut-off go completely; of the last, partial rank only an even share goes,
+            // spread along the row (taking them left to right would lighten the left edge)
+            const cutoff = rank(candidates[n - 1]);
+            const below = candidates.filter((x) => rank(x) < cutoff);
+            const group = candidates.filter((x) => rank(x) === cutoff);
+            const share = n - below.length;
+            const removed = below.concat(
+                Array.from({ length: share }, (_, i) => group[Math.floor((i + 0.5) * group.length / share)]));
+            for (const x of removed) {
+                out[y * width + x] = 255;
             }
             excess -= n;
         };
         const columns = Array.from({ length: width }, (_, x) => x);
-        removeEvenly(columns.filter((x) => black(x, y) && inClearedChunk(x) && deepInterior(x)));
+        removeByRank(columns.filter((x) => black(x, y) && deepInterior(x)));
         if (excess > 0) {
-            removeEvenly(columns.filter((x) => out[y * width + x] <= threshold && inClearedChunk(x)));
-        }
-        if (excess > 0) {
-            removeEvenly(columns.filter((x) => out[y * width + x] <= threshold));
+            removeByRank(columns.filter((x) => out[y * width + x] <= threshold));
         }
     }
     return out;

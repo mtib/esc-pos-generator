@@ -4,6 +4,18 @@ const rowCounts = (pixels: Uint8Array, width: number, height: number) =>
     Array.from({ length: height }, (_, y) => pixels.slice(y * width, (y + 1) * width).filter((p) => p <= 200).length);
 
 describe('limitBlackPerRow', () => {
+    test('a row only slightly over the limit loses exactly its excess', () => {
+        // 12 rows, 230 black dots wide in the middle of a 384 dot row: 23 over the 207 dot limit
+        const pixels = new Uint8Array(384 * 12).fill(255);
+        for (let y = 0; y < 12; y++) {
+            for (let x = 77; x < 307; x++) {
+                pixels[y * 384 + x] = 0;
+            }
+        }
+        const limited = limitBlackPerRow(pixels, 384, 12);
+        expect(rowCounts(limited, 384, 12)[6]).toBe(207);
+    });
+
     test('a full black block ends up at or below 54% of every row', () => {
         const pixels = new Uint8Array(384 * 24).fill(0);
         const limited = limitBlackPerRow(pixels, 384, 24);
