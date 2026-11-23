@@ -60,7 +60,24 @@ const fill = (widthPx, heightPx, byteAt) => {
 // narrows down the limit between 192 (solid) and 240 (streaky) dots with contiguous solid bars.
 // Round 5 found: contiguous bars of 192 to 208 dots print solid, 216 gets specks, 224 to 240 are mottled.
 // Round 6 (--round 6) sends the same kind of bars one raster row at a time with a pause after every row.
-if (round === 6) {
+// Round 6 found: one row at a time with pauses is patchy and fainter than continuous sending. Round 7 (--round 7)
+// tries the middle: strips of 2, 4, 8 and 16 rows with a pause between strips, at 240 and 288 dots, vs a continuous control.
+if (round === 7) {
+    add([0x1b, 0x40, ...text("HEAT TEST 7, strips"), ...feed(1)]);
+    for (const dots of [240, 288]) {
+        const bar = (rows) => fill(384, rows, (x) => (x * 8 < dots ? 0xff : 0x00));
+        add([...text(`${dots} dots, continuous`), ...bar(32)], 1000);
+        add(feed(1), 300);
+        for (const rows of [2, 4, 8, 16]) {
+            add(text(`${dots} dots, ${rows} row strips, 300 ms`));
+            for (let done = 0; done < 32; done += rows) {
+                add(bar(rows), 300);
+            }
+            add(feed(1), 500);
+        }
+    }
+    add([...text("done"), ...feed(4)]);
+} else if (round === 6) {
     add([0x1b, 0x40, ...text("HEAT TEST 6, slowed rows"), ...feed(1)]);
     for (const pause of [150, 400]) {
         for (const dots of [216, 240, 264, 288]) {
