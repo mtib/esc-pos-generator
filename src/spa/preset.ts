@@ -14,9 +14,18 @@ export type Settings = {
     lineHeight: number,
 };
 
-export type Preset = Partial<Settings> & { content?: string };
+/**
+ * `dither` and `offsetPx` describe the printer and the content, not the layout, so they live outside `Settings`
+ * (loading an example must not reset them):
+ *   - dither: Atkinson dithering of greys and pictures; off gives a hard black and white cut, crisper for plain text
+ *   - offsetPx: shifts the content right (positive) or left (negative) by narrowing the opposite padding, to even out
+ *     a printer whose paper margins differ (measured: 4 mm left, 8 mm right on the 0456:0808, so +32 centres it)
+ */
+export type Preset = Partial<Settings> & { content?: string, dither?: boolean, offsetPx?: number };
 
 type Range = { min: number, max: number, step: number };
+
+export const OFFSET_RANGE: Range = { min: -64, max: 64, step: 1 };
 
 /** Ranges shared by the sliders, the width field and the hash decoder. */
 export const RANGES: { [K in keyof Settings]: Range } = {
@@ -38,11 +47,13 @@ export const DEFAULT_SETTINGS: Settings = {
 };
 
 /** Clamps to the range and snaps to its step; returns undefined for anything that is not a finite number. */
-export const clampSetting = (key: keyof Settings, value: unknown): number | undefined => {
+export const clampSetting = (key: keyof Settings, value: unknown): number | undefined => clampToRange(RANGES[key], value);
+
+export const clampToRange = (range: Range, value: unknown): number | undefined => {
     if (typeof value !== "number" || !Number.isFinite(value)) {
         return undefined;
     }
-    const { min, max, step } = RANGES[key];
+    const { min, max, step } = range;
     const snapped = Math.round(value / step) * step;
     // round away floating point noise from the step multiplication (0.1 * 12 = 1.2000000000000002)
     const clean = Math.round(snapped * 1000) / 1000;
@@ -91,6 +102,13 @@ export const decodePreset = (hash: string): Preset | null => {
     const preset: Preset = {};
     if (typeof raw.content === "string") {
         preset.content = raw.content;
+    }
+    if (typeof raw.dither === "boolean") {
+        preset.dither = raw.dither;
+    }
+    const offset = clampToRange(OFFSET_RANGE, raw.offsetPx);
+    if (offset !== undefined) {
+        preset.offsetPx = offset;
     }
     for (const key of Object.keys(RANGES) as (keyof Settings)[]) {
         const value = clampSetting(key, raw[key]);

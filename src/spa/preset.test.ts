@@ -2,6 +2,20 @@ import { describe, expect, test } from "@jest/globals";
 import { clampSetting, decodePreset, DEFAULT_SETTINGS, encodePreset, Preset } from "./preset";
 import { TEA_LABEL } from "./examples";
 
+describe("preset dither and offset", () => {
+    test("round trips dither and offset", () => {
+        expect(decodePreset(encodePreset({ content: "x", dither: false, offsetPx: 32 }))).toEqual({ content: "x", dither: false, offsetPx: 32 });
+        expect(decodePreset(encodePreset({ dither: true, offsetPx: -16 }))).toEqual({ dither: true, offsetPx: -16 });
+    });
+
+    test("clamps the offset and ignores values of the wrong type", () => {
+        expect(decodePreset(encodePreset({ offsetPx: 500 }))?.offsetPx).toBe(64);
+        expect(decodePreset(encodePreset({ offsetPx: -500 }))?.offsetPx).toBe(-64);
+        const bad = btoa(JSON.stringify({ content: "x", dither: "no", offsetPx: "3" })).replace(/=+$/, "");
+        expect(decodePreset(bad)).toEqual({ content: "x" });
+    });
+});
+
 describe("preset hash codec", () => {
     test("round trips content and settings", () => {
         const preset: Preset = { ...DEFAULT_SETTINGS, content: "# Hello\n- [x] done" };

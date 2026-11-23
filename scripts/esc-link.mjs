@@ -7,7 +7,7 @@ import { createRequire } from "node:module";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { decodePreset, encodePreset, RANGES, clampSetting } from "../src/spa/preset.ts";
+import { decodePreset, encodePreset, RANGES, OFFSET_RANGE, clampSetting, clampToRange } from "../src/spa/preset.ts";
 
 const BASE = "https://esc.pos.mtib.dev/";
 const FLAGS = {
@@ -41,6 +41,10 @@ Options:
   --printer <vid:pid> USB id for --print (default 0456:0808)
   --no-limit          render without the black limit (preview, print and --dump see the unthinned dither)
   --dump <file>       write the rendered pixels as raw 8 bit grey (width x height bytes) for experiments
+  --offset <dots>     shift the content right (negative: left), evens out a printer whose paper margins differ
+                      (the 0456:0808 has 4 mm left and 8 mm right of the paper, so use --offset 32 there)
+  --dither / --no-dither  force dithering on or off (default: off unless the content has pictures, so plain
+                      text prints with crisp edges; the link always carries the choice so it overrides the browser's)
   --open              open the link in the default browser instead of printing it
   --base <url>        app address (default ${BASE})
   --decode <x>        print the decoded JSON of a link or hash and exit
@@ -60,6 +64,8 @@ let decode;
 let open = false;
 let previewFile;
 let print = false;
+let offset;
+let ditherFlag;
 let noLimit = false;
 let dumpFile;
 let printerId = "0456:0808";
@@ -73,6 +79,14 @@ for (let i = 0; i < args.length; i++) {
         base = args[++i] ?? fail("--base needs a value");
     } else if (arg === "--preview") {
         previewFile = args[++i] ?? fail("--preview needs a file name");
+    } else if (arg === "--offset") {
+        const raw = args[++i] ?? fail("--offset needs a number of dots");
+        offset = clampToRange(OFFSET_RANGE, Number(raw)) ?? fail(`--offset needs a number, got "${raw}"`);
+        if (offset !== Number(raw)) {
+            console.error(`esc-link: --offset ${raw} adjusted to ${offset} (allowed ${OFFSET_RANGE.min} to ${OFFSET_RANGE.max})`);
+        }
+    } else if (arg === "--dither" || arg === "--no-dither") {
+        ditherFlag = arg === "--dither";
     } else if (arg === "--no-limit") {
         noLimit = true;
     } else if (arg === "--dump") {
@@ -123,7 +137,12 @@ if (content === "") {
     fail("input is empty");
 }
 
-const link = `${base.replace(/#.*$/, "")}#${encodePreset({ ...settings, content })}`;
+// Dithering only helps pictures and greys. Plain text prints crisper with a hard black and white cut, so the link
+// turns it off unless the content has an <img> or a Markdown image (the choice is always written, so a picture link
+// turns it back on in a browser where an earlier text link had switched it off).
+const hasPictures = /<img\b/i.test(content) || /!\[[^\]]*\]\([^)]+\)/.test(content);
+const dither = ditherFlag ?? hasPictures;
+const link = `${base.replace(/#.*$/, "")}#${encodePreset({ ...settings, ...(offset === undefined ? {} : { offsetPx: offset }), dither, content })}`;
 if (link.length > MAX_SAFE_LENGTH) {
     console.error(`esc-link: link is ${link.length} characters, some chat apps and servers cut links above ${MAX_SAFE_LENGTH}`);
 }

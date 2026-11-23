@@ -9,7 +9,7 @@ import { Cancelled, errorName, friendlyError, RenderError } from '../errors';
 import { DEFAULT_CONTENT, EXAMPLES } from '../examples';
 import { downloadFileName, PAPER_PRESETS, pxToMm } from '../format';
 import { imageFileToDataUrl, isSavedInLocalStorage } from '../images';
-import { decodePreset, DEFAULT_SETTINGS, encodePreset, Preset, RANGES, Settings } from '../preset';
+import { decodePreset, DEFAULT_SETTINGS, encodePreset, OFFSET_RANGE, Preset, RANGES, Settings } from '../preset';
 import { markdownToSafeHtml } from '../sanitize';
 
 type Status = { severity: Severity, message: string, undo?: () => void } | null;
@@ -85,6 +85,10 @@ const SPA = () => {
     const [showPrinted, setShowPrinted] = useStorageState('preview-show-printed', true);
     // many small printers fade or print nothing when more than half of a row is black (see src/limitBlack.ts)
     const [limitBlack, setLimitBlack] = useStorageState('printer-limit-black', true);
+    // Atkinson dithering of greys and pictures; off cuts hard to black and white, which is crisper for plain text
+    const [dither, setDither] = useStorageState('printer-dither', true);
+    // shifts the content right (positive) or left (negative) to even out unequal paper margins of the printer
+    const [offsetPx, setOffsetPx] = useStorageState('printer-offset-px', 0);
     const [savedPrinter, setSavedPrinter] = useStorageState<UsbId | null>('printer-usb-id', null);
 
     const settings: Settings = { widthPx, padLeftPx, padRightPx, padBottomPx, fontSizePx, lineHeight };
@@ -108,8 +112,8 @@ const SPA = () => {
     React.useEffect(() => setWidthDraft(String(widthPx)), [widthPx]);
 
     // keep the latest values for callbacks that run after an await
-    const latest = React.useRef({ content, settings });
-    latest.current = { content, settings };
+    const latest = React.useRef({ content, settings, dither, offsetPx });
+    latest.current = { content, settings, dither, offsetPx };
 
     const applySettings = React.useCallback((next: Partial<Settings>) => {
         if (next.widthPx !== undefined) setWidthPx(next.widthPx);
@@ -123,7 +127,11 @@ const SPA = () => {
     /** Applies a preset and returns a function that restores what was there before. */
     const applyPreset = React.useCallback((preset: Preset): () => void => {
         const before = { ...latest.current.settings, content: latest.current.content };
+        const beforeDither = latest.current.dither;
+        const beforeOffset = latest.current.offsetPx;
         applySettings(preset);
+        if (preset.dither !== undefined) setDither(preset.dither);
+        if (preset.offsetPx !== undefined) setOffsetPx(preset.offsetPx);
         if (preset.content !== undefined) {
             setContent(preset.content);
         }
@@ -132,9 +140,11 @@ const SPA = () => {
         }
         return () => {
             applySettings(before);
+            setDither(beforeDither);
+            setOffsetPx(beforeOffset);
             setContent(before.content);
         };
-    }, [applySettings, setContent]);
+    }, [applySettings, setContent, setDither, setOffsetPx]);
 
     // a preset in the URL hash overrides the saved state once, then the hash is removed so a reload keeps edits
     React.useEffect(() => {
@@ -180,7 +190,17 @@ const SPA = () => {
         context.fillRect(0, 0, width, height);
         context.drawImage(canvas, 0, 0);
         try {
-            const image = Dither.atkinson(Dither.grayscale(context.getImageData(0, 0, width, height)));
+            const grey = Dither.grayscale(context.getImageData(0, 0, width, height));
+            let image: ImageData;
+            if (dither) {
+                image = Dither.atkinson(grey);
+            } else {
+                // hard cut: crisp text edges, no dither noise (greys become black or white)
+                image = grey;
+                for (let i = 0; i < image.data.length; i += 4) {
+                    image.data[i] = image.data[i + 1] = image.data[i + 2] = image.data[i] < 128 ? 0 : 255;
+                }
+            }
             if (!limitBlack) {
                 return image;
             }
@@ -197,7 +217,7 @@ const SPA = () => {
         } catch (error) {
             throw new RenderError(error);
         }
-    }, [limitBlack]);
+    }, [limitBlack, dither]);
 
     /** Renders the preview, dithers it and returns the ESC/POS bytes. */
     const render = React.useCallback(async () => {
@@ -240,7 +260,7 @@ const SPA = () => {
             cancelled = true;
             window.clearTimeout(timer);
         };
-    }, [showPrinted, rasterise, htmlContent, widthPx, padLeftPx, padRightPx, padBottomPx, fontSizePx, lineHeight]);
+    }, [showPrinted, rasterise, htmlContent, widthPx, padLeftPx, padRightPx, padBottomPx, fontSizePx, lineHeight, offsetPx]);
 
     // receipt size for the size line, and the preview column width for scaling the paper on narrow screens
     React.useEffect(() => {
@@ -368,7 +388,7 @@ const SPA = () => {
     }, []);
 
     const copyLink = React.useCallback(() => run('link', async () => {
-        const hash = encodePreset({ content: latest.current.content, ...latest.current.settings });
+        const hash = encodePreset({ content: latest.current.content, ...latest.current.settings, ...(latest.current.dither ? {} : { dither: false }) });
         const url = `${window.location.origin}${window.location.pathname}#${hash}`;
         try {
             await navigator.clipboard.writeText(url);
@@ -387,7 +407,7 @@ const SPA = () => {
         const end = editor?.selectionEnd ?? start;
         return run('image', async () => {
             const { widthPx: width, padLeftPx: left, padRightPx: right } = latest.current.settings;
-            const maxWidth = Math.max(1, width - left - right);
+            const maxWidth = Math.max(1, width - left - right - Math.abs(latest.current.offsetPx));
             let snippet = '';
             let scaledTo = 0;
             for (const file of files) {
@@ -560,6 +580,7 @@ const SPA = () => {
                         )}
                         <Slider label="Left padding" unit="px" value={padLeftPx} onChange={setPadLeftPx} {...RANGES.padLeftPx} />
                         <Slider label="Right padding" unit="px" value={padRightPx} onChange={setPadRightPx} {...RANGES.padRightPx} />
+                        <Slider label="Shift content (printer margin offset)" unit="px" value={offsetPx} onChange={setOffsetPx} {...OFFSET_RANGE} />
                         <Slider label="Bottom padding" unit="px" value={padBottomPx} onChange={setPadBottomPx} {...RANGES.padBottomPx} />
                         <Slider label="Font size" unit="px" value={fontSizePx} onChange={setFontSizePx} {...RANGES.fontSizePx} />
                         <Slider
@@ -583,6 +604,7 @@ const SPA = () => {
             >
                 <Switch label="Show printed result (dithered)" checked={showPrinted} onChange={setShowPrinted} />
                 <Switch label="Limit black per row (for printers that fade on large black areas)" checked={limitBlack} onChange={setLimitBlack} />
+                <Switch label="Dither pictures and greys (off is crisper for plain text)" checked={dither} onChange={setDither} />
                 <div ref={previewColumnRef} className="spa-paper-column">
                     <div
                         className="spa-paper"
@@ -597,8 +619,8 @@ const SPA = () => {
                                     <div style={{
                                         paddingTop: '1px',
                                         paddingBottom: `${padBottomPx}px`,
-                                        paddingLeft: `${padLeftPx}px`,
-                                        paddingRight: `${padRightPx}px`,
+                                        paddingLeft: `${padLeftPx + Math.max(0, offsetPx)}px`,
+                                        paddingRight: `${padRightPx + Math.max(0, -offsetPx)}px`,
                                     }}>
                                         <div dangerouslySetInnerHTML={{ __html: htmlContent }}></div>
                                     </div>

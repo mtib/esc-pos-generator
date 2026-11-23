@@ -73,6 +73,16 @@ ordered-dither order on 2x2 dot cells, deep interior dots first so outlines and 
 black) text is unreadable, so design with outlines instead of black fills.
 `scripts/heat-test.mjs [--round 1..9]` reprints the experiments (needs the printer free of the `usblp` driver).
 
+## Dither and printer offset (per browser, also settable from a link)
+
+`dither` (default on) switches Atkinson dithering; off cuts hard to black and white (grey below 128 is black), which
+keeps plain text crisp, so `scripts/esc-link.mjs` writes `dither: false` into links without pictures and `true` for
+content with `<img` or `![](`. `offsetPx` (-64 to 64) shifts the content right (positive) or left by narrowing the
+opposite padding, to even out a printer whose paper margins differ: the 0456:0808 measured 4 mm left and 8 mm right
+with equal padding (head not centred on the paper), so `--offset 32` (32 dots = 4 mm) centres it. Both live in
+`localStorage` (`printer-dither`, `printer-offset-px`), not in `Settings`, so examples and Reset do not touch them.
+`examples/margin-test.html` in the skill prints bars at 0, 5, 10 and 20 dots from each edge to verify this.
+
 ## Rasterising gotcha
 
 The raster width is always the paper width (`element.clientWidth`), never `scrollWidth`: content that overflows the paper
