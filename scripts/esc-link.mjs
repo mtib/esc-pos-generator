@@ -155,7 +155,7 @@ const renderPreview = async (url, outFile, expectedWidth, wantPixels = false, li
             ws.send(JSON.stringify({ id, method, params }));
         });
         const evaluate = async (expression) => (await send("Runtime.evaluate", { expression, awaitPromise: true, returnByValue: true })).result?.result?.value;
-        await send("Emulation.setDeviceMetricsOverride", { width: 1280, height: 900, deviceScaleFactor: 1, mobile: false });
+        await send("Emulation.setDeviceMetricsOverride", { width: 1280, height: 900, deviceScaleFactor: Number(process.env.ESC_LINK_DPR ?? 1), mobile: false });
         if (!limit) {
             // the app keeps the switch in localStorage; seed it before the page loads
             await send("Page.addScriptToEvaluateOnNewDocument", { source: "localStorage.setItem('printer-limit-black', 'false')" });
@@ -242,7 +242,7 @@ const sendToPrinter = async (bytes, id) => {
 };
 
 if (previewFile || print || dumpFile) {
-    const rect = await renderPreview(link, previewFile, settings.widthPx ?? 384, print || Boolean(dumpFile), !noLimit);
+    const rect = await renderPreview(link, previewFile, process.env.ESC_LINK_ANY_WIDTH ? 0 : (settings.widthPx ?? 384), print || Boolean(dumpFile), !noLimit);
     if (dumpFile) {
         writeFileSync(dumpFile, rect.pixels);
         console.error(`esc-link: dumped ${rect.width} x ${rect.height} grey pixels to ${dumpFile}`);

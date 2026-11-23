@@ -73,6 +73,14 @@ ordered-dither order on 2x2 dot cells, deep interior dots first so outlines and 
 black) text is unreadable, so design with outlines instead of black fills.
 `scripts/heat-test.mjs [--round 1..9]` reprints the experiments (needs the printer free of the `usblp` driver).
 
+## Rasterising gotcha
+
+The raster width is always the paper width (`element.clientWidth`), never `scrollWidth`: content that overflows the paper
+(even by a dot) makes `scrollWidth` larger, the canvas and the ESC/POS rows follow it (49 byte rows on a 48 byte head)
+and anything past the canvas edge reads as transparent black, a stray vertical line. `rasterise` in `SPA.tsx` flattens
+the render onto a white canvas of exactly the paper size and crops overflow. `ESC_LINK_DPR` and `ESC_LINK_ANY_WIDTH`
+(env vars of `scripts/esc-link.mjs`) exist to reproduce such problems.
+
 ## Preset links CLI
 
 `scripts/esc-link.mjs [file] [--width px ...]` turns HTML/Markdown from a file or stdin into an esc.pos.mtib.dev

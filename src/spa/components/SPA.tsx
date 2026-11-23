@@ -164,12 +164,21 @@ const SPA = () => {
         } catch (error) {
             throw new RenderError(error);
         }
-        const context = canvas.getContext('2d');
+        // The paper is exactly clientWidth dots wide. Never use scrollWidth: content that overflows the paper (even by a
+        // dot) makes it larger, the raster rows then no longer fit the print head, and anything outside the rendered
+        // canvas would read as transparent black. Flatten onto white at the paper size instead, cropping any overflow.
+        const width = element.clientWidth;
+        const height = element.scrollHeight;
+        const flat = document.createElement('canvas');
+        flat.width = width;
+        flat.height = height;
+        const context = flat.getContext('2d');
         if (!context) {
             throw new Error('Failed to get canvas context');
         }
-        const width = element.scrollWidth;
-        const height = element.scrollHeight;
+        context.fillStyle = '#fff';
+        context.fillRect(0, 0, width, height);
+        context.drawImage(canvas, 0, 0);
         try {
             const image = Dither.atkinson(Dither.grayscale(context.getImageData(0, 0, width, height)));
             if (!limitBlack) {
@@ -248,7 +257,7 @@ const SPA = () => {
             }
         };
         const observer = new ResizeObserver(() => {
-            setReceiptSize({ width: element.scrollWidth, height: element.scrollHeight });
+            setReceiptSize({ width: element.clientWidth, height: element.scrollHeight });
             setColumnWidth(column.clientWidth);
             updateSticky();
         });
