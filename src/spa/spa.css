@@ -51,12 +51,13 @@
     background: #0b0b0b;
 }
 
+/* Pinned while editing, but only when the whole preview fits the window (see SPA.tsx). A taller sticky box
+   would need its own scrollbar, and that scrollbar narrows the column, rescales the paper, shrinks the box
+   and makes the scrollbar vanish again: a flicker loop. A taller preview scrolls with the page instead. */
 @media (min-width: 900px) {
-    .spa-preview {
+    .spa-preview--sticky {
         position: sticky;
         top: var(--space-5);
-        max-height: calc(100vh - 2 * var(--space-5));
-        overflow-y: auto;
     }
 }
 

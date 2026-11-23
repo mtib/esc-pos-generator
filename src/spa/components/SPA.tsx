@@ -95,6 +95,8 @@ const SPA = () => {
     const [linkFallback, setLinkFallback] = React.useState<string | null>(null);
     const [receiptSize, setReceiptSize] = React.useState({ width: 0, height: 0 });
     const [columnWidth, setColumnWidth] = React.useState(0);
+    const previewRef = React.useRef<HTMLElement>(null);
+    const [previewSticky, setPreviewSticky] = React.useState(true);
     const [printedReady, setPrintedReady] = React.useState(false);
     const [previewError, setPreviewError] = React.useState<string | null>(null);
 
@@ -222,13 +224,25 @@ const SPA = () => {
         if (!element || !column) {
             return undefined;
         }
+        // pin the preview only when all of it fits the window, 24px margin above and below (--space-5)
+        const updateSticky = () => {
+            const preview = previewRef.current;
+            if (preview) {
+                setPreviewSticky(preview.offsetHeight <= window.innerHeight - 48);
+            }
+        };
         const observer = new ResizeObserver(() => {
             setReceiptSize({ width: element.scrollWidth, height: element.scrollHeight });
             setColumnWidth(column.clientWidth);
+            updateSticky();
         });
         observer.observe(element);
         observer.observe(column);
-        return () => observer.disconnect();
+        window.addEventListener('resize', updateSticky);
+        return () => {
+            observer.disconnect();
+            window.removeEventListener('resize', updateSticky);
+        };
     }, []);
 
     const run = React.useCallback(async (action: BusyAction, work: () => Promise<Exclude<Status, null> | string | null>) => {
@@ -536,7 +550,8 @@ const SPA = () => {
                 </Accordion>
             </Stack>
             <section
-                className="spa-preview ui-focusable"
+                ref={previewRef}
+                className={`spa-preview ui-focusable${previewSticky ? ' spa-preview--sticky' : ''}`}
                 aria-label="Receipt preview"
                 tabIndex={0}
                 style={{ ['--paper-width' as string]: `${widthPx}px` }}

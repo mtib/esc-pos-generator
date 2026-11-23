@@ -3,6 +3,9 @@
 // Needs Node 22.18+ (runs the TypeScript codec directly, so the CLI can never drift from the app).
 import fs from "node:fs";
 import { spawn } from "node:child_process";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { decodePreset, encodePreset, RANGES, clampSetting } from "../src/spa/preset.ts";
 
 const BASE = "https://esc.pos.mtib.dev/";
@@ -30,6 +33,8 @@ Options:
   --pad-bottom <px>   ${RANGES.padBottomPx.min} to ${RANGES.padBottomPx.max}
   --font-size <px>    ${RANGES.fontSizePx.min} to ${RANGES.fontSizePx.max}
   --line-height <n>   ${RANGES.lineHeight.min} to ${RANGES.lineHeight.max}
+  --preview <png>     render the dithered result (what the printer gets) to a PNG with headless Chromium
+                      and print its size; nothing is opened and no link is printed
   --open              open the link in the default browser instead of printing it
   --base <url>        app address (default ${BASE})
   --decode <x>        print the decoded JSON of a link or hash and exit
@@ -47,6 +52,7 @@ let file;
 let base = BASE;
 let decode;
 let open = false;
+let previewFile;
 
 for (let i = 0; i < args.length; i++) {
     const arg = args[i];
@@ -55,6 +61,8 @@ for (let i = 0; i < args.length; i++) {
         process.exit(0);
     } else if (arg === "--base") {
         base = args[++i] ?? fail("--base needs a value");
+    } else if (arg === "--preview") {
+        previewFile = args[++i] ?? fail("--preview needs a file name");
     } else if (arg === "--open") {
         open = true;
     } else if (arg === "--decode") {
@@ -101,7 +109,71 @@ const link = `${base.replace(/#.*$/, "")}#${encodePreset({ ...settings, content 
 if (link.length > MAX_SAFE_LENGTH) {
     console.error(`esc-link: link is ${link.length} characters, some chat apps and servers cut links above ${MAX_SAFE_LENGTH}`);
 }
-if (open) {
+/** Loads the link in headless Chromium (muted, fresh profile) and saves the dithered canvas as a PNG. */
+const renderPreview = async (url, outFile, expectedWidth) => {
+    const profile = mkdtempSync(join(tmpdir(), "esc-link-"));
+    const port = 9300 + Math.floor(Math.random() * 500);
+    const chrome = spawn(process.env.CHROMIUM ?? "chromium", ["--headless=new", "--mute-audio", "--no-sandbox", "--disable-gpu",
+        "--hide-scrollbars", `--user-data-dir=${profile}`, `--remote-debugging-port=${port}`, "--window-size=1280,900", "about:blank"],
+        { stdio: "ignore" });
+    chrome.on("error", (error) => fail(`could not start chromium (${error.message}), set CHROMIUM to its path`));
+    const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+    try {
+        let targets;
+        for (let i = 0; i < 50 && !targets; i++) {
+            try { targets = await (await fetch(`http://127.0.0.1:${port}/json`)).json(); } catch { await sleep(200); }
+        }
+        const page = targets?.find((t) => t.type === "page") ?? fail("chromium did not start");
+        const ws = new WebSocket(page.webSocketDebuggerUrl);
+        await new Promise((resolve) => ws.addEventListener("open", resolve));
+        let id = 0;
+        const pending = new Map();
+        ws.addEventListener("message", (event) => {
+            const message = JSON.parse(event.data);
+            pending.get(message.id)?.(message);
+        });
+        const send = (method, params = {}) => new Promise((resolve) => {
+            pending.set(++id, resolve);
+            ws.send(JSON.stringify({ id, method, params }));
+        });
+        const evaluate = async (expression) => (await send("Runtime.evaluate", { expression, awaitPromise: true, returnByValue: true })).result?.result?.value;
+        await send("Emulation.setDeviceMetricsOverride", { width: 1280, height: 900, deviceScaleFactor: 1, mobile: false });
+        await send("Page.navigate", { url });
+        // the canvas is redrawn about 300 ms after each change; wait until it has the paper width and stays stable
+        let rect;
+        let previous = "";
+        for (let i = 0; i < 100; i++) {
+            await sleep(300);
+            await evaluate("document.fonts.ready.then(() => true)");
+            const current = await evaluate(`(() => { const c = document.querySelector('[aria-label="Receipt preview"] canvas');
+                if (!c || c.width === 0) return ''; const r = c.getBoundingClientRect();
+                return JSON.stringify({ x: r.x + scrollX, y: r.y + scrollY, width: c.width, height: c.height }); })()`);
+            if (current && current === previous && (!expectedWidth || JSON.parse(current).width === expectedWidth)) {
+                rect = JSON.parse(current);
+                break;
+            }
+            previous = current;
+        }
+        if (!rect) {
+            fail("the printed preview never appeared (is the 'Show printed result' switch off in this profile?)");
+        }
+        // the on-page canvas can be scaled by CSS; capture it at its native pixel size
+        const shot = await send("Page.captureScreenshot", { format: "png", captureBeyondViewport: true, clip: { ...rect, scale: 1 } });
+        writeFileSync(outFile, Buffer.from(shot.result.data, "base64"));
+        ws.close();
+        return rect;
+    } finally {
+        const exited = new Promise((resolve) => chrome.once("exit", resolve));
+        chrome.kill();
+        await Promise.race([exited, sleep(3000)]);
+        rmSync(profile, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
+    }
+};
+
+if (previewFile) {
+    const rect = await renderPreview(link, previewFile, settings.widthPx ?? 384);
+    console.error(`esc-link: wrote ${previewFile} (${rect.width} x ${rect.height} px, about ${Math.round(rect.height / 8)} mm of paper)`);
+} else if (open) {
     const [command, ...commandArgs] = process.platform === "darwin" ? ["open"]
         : process.platform === "win32" ? ["cmd", "/c", "start", ""]
             : ["xdg-open"];
