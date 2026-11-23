@@ -3,6 +3,7 @@ import domtoimage from "dom-to-image-more";
 import useStorageState from 'react-use-storage-state';
 import EscPosGenerator from '../../EscPosGenerator';
 import Dither from 'canvas-dither';
+import { limitBlackPerRow } from '../../limitBlack';
 import { Accordion, Alert, Button, Dialog, Menu, Row, Severity, Slider, Stack, Switch, TextArea, TextField, Toast, ToggleGroup } from '../ui';
 import { Cancelled, errorName, friendlyError, RenderError } from '../errors';
 import { DEFAULT_CONTENT, EXAMPLES } from '../examples';
@@ -82,6 +83,8 @@ const SPA = () => {
     const [content, setContent] = useStorageState(CONTENT_KEY, DEFAULT_CONTENT);
     const [settingsOpen, setSettingsOpen] = useStorageState('settings-open', false);
     const [showPrinted, setShowPrinted] = useStorageState('preview-show-printed', true);
+    // many small printers fade or print nothing when more than half of a row is black (see src/limitBlack.ts)
+    const [limitBlack, setLimitBlack] = useStorageState('printer-limit-black', true);
     const [savedPrinter, setSavedPrinter] = useStorageState<UsbId | null>('printer-usb-id', null);
 
     const settings: Settings = { widthPx, padLeftPx, padRightPx, padBottomPx, fontSizePx, lineHeight };
@@ -168,11 +171,24 @@ const SPA = () => {
         const width = element.scrollWidth;
         const height = element.scrollHeight;
         try {
-            return Dither.atkinson(Dither.grayscale(context.getImageData(0, 0, width, height)));
+            const image = Dither.atkinson(Dither.grayscale(context.getImageData(0, 0, width, height)));
+            if (!limitBlack) {
+                return image;
+            }
+            // after grayscale + dithering R, G and B are equal, so one channel is enough
+            const pixels = new Uint8Array(width * height);
+            for (let i = 0; i < pixels.length; i++) {
+                pixels[i] = image.data[i * 4];
+            }
+            const limited = limitBlackPerRow(pixels, width, height);
+            for (let i = 0; i < limited.length; i++) {
+                image.data[i * 4] = image.data[i * 4 + 1] = image.data[i * 4 + 2] = limited[i];
+            }
+            return image;
         } catch (error) {
             throw new RenderError(error);
         }
-    }, []);
+    }, [limitBlack]);
 
     /** Renders the preview, dithers it and returns the ESC/POS bytes. */
     const render = React.useCallback(async () => {
@@ -557,6 +573,7 @@ const SPA = () => {
                 style={{ ['--paper-width' as string]: `${widthPx}px` }}
             >
                 <Switch label="Show printed result (dithered)" checked={showPrinted} onChange={setShowPrinted} />
+                <Switch label="Limit black per row (for printers that fade on large black areas)" checked={limitBlack} onChange={setLimitBlack} />
                 <div ref={previewColumnRef} className="spa-paper-column">
                     <div
                         className="spa-paper"
