@@ -56,6 +56,12 @@
     border: none;
 }
 
+/* task lists show only the box, no bullet and no indent */
+.receipt ul:has(input[type="checkbox"]) {
+    list-style: none;
+    padding-left: 0;
+}
+
 .receipt input[type="checkbox"] {
     width: 20px;
     height: 20px;
