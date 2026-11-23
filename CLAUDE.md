@@ -72,7 +72,7 @@ black) text is unreadable, so design with outlines instead of black fills.
 
 `scripts/esc-link.mjs [file] [--width px ...]` turns HTML/Markdown from a file or stdin into an esc.pos.mtib.dev
 preset link (`--decode` inspects one, `--open` opens it in the browser instead of printing it, `--preview out.png` renders the dithered result headless
-with Chromium and writes a PNG). It imports `src/spa/preset.ts` directly (Node 22.18+), so it shares the app's
+with Chromium and writes a PNG, `--print` sends exactly those pixels to the USB printer from Node). It imports `src/spa/preset.ts` directly (Node 22.18+), so it shares the app's
 codec and clamping. The global skill `esc-pos-link` documents the workflow for Claude.
 
 ## CI and deploy

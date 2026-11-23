@@ -3,6 +3,7 @@
 // Needs Node 22.18+ (runs the TypeScript codec directly, so the CLI can never drift from the app).
 import fs from "node:fs";
 import { spawn } from "node:child_process";
+import { createRequire } from "node:module";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -35,6 +36,9 @@ Options:
   --line-height <n>   ${RANGES.lineHeight.min} to ${RANGES.lineHeight.max}
   --preview <png>     render the dithered result (what the printer gets) to a PNG with headless Chromium
                       and print its size; nothing is opened and no link is printed
+  --print             print it: renders like --preview and sends the exact pixels to the USB printer
+                      (needs the printer free of the usblp driver, see the esc-pos-link skill)
+  --printer <vid:pid> USB id for --print (default 0456:0808)
   --open              open the link in the default browser instead of printing it
   --base <url>        app address (default ${BASE})
   --decode <x>        print the decoded JSON of a link or hash and exit
@@ -53,6 +57,8 @@ let base = BASE;
 let decode;
 let open = false;
 let previewFile;
+let print = false;
+let printerId = "0456:0808";
 
 for (let i = 0; i < args.length; i++) {
     const arg = args[i];
@@ -63,6 +69,10 @@ for (let i = 0; i < args.length; i++) {
         base = args[++i] ?? fail("--base needs a value");
     } else if (arg === "--preview") {
         previewFile = args[++i] ?? fail("--preview needs a file name");
+    } else if (arg === "--print") {
+        print = true;
+    } else if (arg === "--printer") {
+        printerId = args[++i] ?? fail("--printer needs vid:pid");
     } else if (arg === "--open") {
         open = true;
     } else if (arg === "--decode") {
@@ -110,7 +120,7 @@ if (link.length > MAX_SAFE_LENGTH) {
     console.error(`esc-link: link is ${link.length} characters, some chat apps and servers cut links above ${MAX_SAFE_LENGTH}`);
 }
 /** Loads the link in headless Chromium (muted, fresh profile) and saves the dithered canvas as a PNG. */
-const renderPreview = async (url, outFile, expectedWidth) => {
+const renderPreview = async (url, outFile, expectedWidth, wantPixels = false) => {
     const profile = mkdtempSync(join(tmpdir(), "esc-link-"));
     const port = 9300 + Math.floor(Math.random() * 500);
     const chrome = spawn(process.env.CHROMIUM ?? "chromium", ["--headless=new", "--mute-audio", "--no-sandbox", "--disable-gpu",
@@ -158,10 +168,21 @@ const renderPreview = async (url, outFile, expectedWidth) => {
             fail("the printed preview never appeared (is the 'Show printed result' switch off in this profile?)");
         }
         // the on-page canvas can be scaled by CSS; capture it at its native pixel size
-        const shot = await send("Page.captureScreenshot", { format: "png", captureBeyondViewport: true, clip: { ...rect, scale: 1 } });
-        writeFileSync(outFile, Buffer.from(shot.result.data, "base64"));
+        if (outFile) {
+            const shot = await send("Page.captureScreenshot", { format: "png", captureBeyondViewport: true, clip: { ...rect, scale: 1 } });
+            writeFileSync(outFile, Buffer.from(shot.result.data, "base64"));
+        }
+        let pixels;
+        if (wantPixels) {
+            // the canvas holds exactly the dithered (and black limited) dots the printer gets: read the red channel
+            const base64 = await evaluate(`(() => { const c = document.querySelector('[aria-label="Receipt preview"] canvas');
+                const d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data; const out = new Uint8Array(c.width * c.height);
+                for (let i = 0; i < out.length; i++) out[i] = d[i * 4];
+                let s = ''; for (let i = 0; i < out.length; i += 8192) s += String.fromCharCode(...out.subarray(i, i + 8192)); return btoa(s); })()`);
+            pixels = Uint8Array.from(Buffer.from(base64, "base64"));
+        }
         ws.close();
-        return rect;
+        return { ...rect, pixels };
     } finally {
         const exited = new Promise((resolve) => chrome.once("exit", resolve));
         chrome.kill();
@@ -170,9 +191,55 @@ const renderPreview = async (url, outFile, expectedWidth) => {
     }
 };
 
-if (previewFile) {
-    const rect = await renderPreview(link, previewFile, settings.widthPx ?? 384);
-    console.error(`esc-link: wrote ${previewFile} (${rect.width} x ${rect.height} px, about ${Math.round(rect.height / 8)} mm of paper)`);
+/** ESC @, one GS v 0 raster image (rows padded to whole bytes, dots at or below 200 are black), then a few line feeds. */
+const toEscPos = (pixels, width, height) => {
+    const rowBytes = Math.ceil(width / 8);
+    const out = new Uint8Array(2 + 8 + rowBytes * height + 4);
+    out.set([0x1b, 0x40, 0x1d, 0x76, 0x30, 0x00, rowBytes & 0xff, rowBytes >> 8, height & 0xff, height >> 8]);
+    for (let y = 0; y < height; y++) {
+        for (let x = 0; x < width; x++) {
+            if (pixels[y * width + x] <= 200) {
+                out[10 + y * rowBytes + (x >> 3)] |= 0x80 >> (x & 7);
+            }
+        }
+    }
+    out.fill(0x0a, out.length - 4);
+    return out;
+};
+
+const sendToPrinter = async (bytes, id) => {
+    const [vid, pid] = id.split(":").map((x) => Number.parseInt(x, 16));
+    const usb = createRequire(import.meta.url)("usb");
+    const device = usb.findByIds(vid, pid) ?? fail(`printer ${id} not found (plugged into a host mode USB-C port?)`);
+    device.open();
+    try {
+        const iface = device.interfaces[0];
+        if (iface.isKernelDriverActive()) {
+            iface.detachKernelDriver();
+        }
+        iface.claim();
+        const out = iface.endpoints.find((e) => e.direction === "out");
+        for (let offset = 0; offset < bytes.length; offset += 4096) {
+            await new Promise((resolve, reject) => out.transfer(Buffer.from(bytes.subarray(offset, offset + 4096)),
+                (error) => (error ? reject(error) : resolve())));
+        }
+        await new Promise((resolve) => iface.release(true, () => resolve()));
+    } finally {
+        device.close();
+    }
+};
+
+if (previewFile || print) {
+    const rect = await renderPreview(link, previewFile, settings.widthPx ?? 384, print);
+    const size = `${rect.width} x ${rect.height} px, about ${Math.round(rect.height / 8)} mm of paper`;
+    if (previewFile) {
+        console.error(`esc-link: wrote ${previewFile} (${size})`);
+    }
+    if (print) {
+        const bytes = toEscPos(rect.pixels, rect.width, rect.height);
+        await sendToPrinter(bytes, printerId);
+        console.error(`esc-link: printed ${bytes.length} bytes (${size})`);
+    }
 } else if (open) {
     const [command, ...commandArgs] = process.platform === "darwin" ? ["open"]
         : process.platform === "win32" ? ["cmd", "/c", "start", ""]
